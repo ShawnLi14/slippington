@@ -19,10 +19,11 @@ export class GameScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private collisionSystem!: CollisionSystem;
 
-  // Entities
-  private localPlayer: PlayerSprite | null = null;
-  private localPlayerId: string | null = null;
+  // Remote players map
   private remotePlayers: Map<string, PlayerSprite> = new Map();
+  
+  // Track collision state to detect edges (entering collision)
+  private collidingPlayers: Set<string> = new Set();
   private platformSprites: PlatformSprite[] = [];
 
   // Map data
@@ -220,11 +221,21 @@ export class GameScene extends Phaser.Scene {
         remotePlayer.x, remotePlayer.y
       );
 
-      const tagRange = GAME_CONFIG.PLAYER_SIZE * 1.2;
+      const tagRange = GAME_CONFIG.PLAYER_SIZE; // Exact overlap
 
       if (distance < tagRange) {
-        this.performTag(remoteId);
-        break;
+        // Currently colliding
+        if (!this.collidingPlayers.has(remoteId)) {
+          // ENTERING collision -> trigger tag
+          this.collidingPlayers.add(remoteId);
+          this.performTag(remoteId);
+        }
+      } else {
+        // Not colliding
+        if (this.collidingPlayers.has(remoteId)) {
+          // LEAVING collision -> reset state
+          this.collidingPlayers.delete(remoteId);
+        }
       }
     }
   }
@@ -433,7 +444,7 @@ export class GameScene extends Phaser.Scene {
     const existing = this.remotePlayers.get(id);
     
     if (existing) {
-      existing.moveTo(data.x, data.y);
+      existing.moveTo(data.x, data.y, data.velocity_y);
       existing.setFacingRight(data.facing_right);
       existing.updateAppearance(data.color, data.is_it);
     } else {

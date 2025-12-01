@@ -29,12 +29,21 @@ export class PlayerSprite {
   private classId: PlayerClassId;
   private _facingRight: boolean = true;
 
+  // Interpolation state
+  private targetX: number;
+  private targetY: number;
+  private targetVelocityX: number = 0;
+  private targetVelocityY: number = 0;
+  private lastUpdate: number = 0;
+
   constructor(config: PlayerSpriteConfig) {
     this.scene = config.scene;
     this.isLocal = config.isLocal;
     this.currentColor = config.color;
     this.currentIsIt = config.isIt;
     this.classId = config.classId || 'speedster';
+    this.targetX = config.x;
+    this.targetY = config.y;
 
     const textureKey = this.createTexture(config.color, config.isIt);
 
@@ -81,6 +90,9 @@ export class PlayerSprite {
       this.arrow = this.createArrowForContainer();
       this.arrow.setVisible(config.isIt);
       this.container.add(this.arrow);
+
+      // Update interpolation for remote players
+      this.scene.events.on('update', this.updateInterpolation, this);
     }
   }
 
@@ -125,6 +137,23 @@ export class PlayerSprite {
         this.arrow.setPosition(this.sprite.x, this.sprite.y - GAME_CONFIG.PLAYER_SIZE / 2 - 5);
       }
     }
+  };
+
+  private updateInterpolation = (time: number, delta: number) => {
+    if (this.isLocal) return;
+
+    // Smoothly move towards target position (0.2 factor = fast but smooth)
+    const lerpFactor = 0.2;
+    
+    // Apply velocity prediction if we haven't received an update recently
+    // This prevents "stuttering" when updates are delayed
+    if (Date.now() - this.lastUpdate > GAME_CONFIG.POSITION_UPDATE_INTERVAL * 1.5) {
+      this.targetX += (this.targetVelocityX * delta) / 1000;
+      this.targetY += (this.targetVelocityY * delta) / 1000;
+    }
+
+    this.container.x = Phaser.Math.Linear(this.container.x, this.targetX, lerpFactor);
+    this.container.y = Phaser.Math.Linear(this.container.y, this.targetY, lerpFactor);
   };
 
   // Position getters
@@ -215,15 +244,16 @@ export class PlayerSprite {
   }
 
   // Remote player interpolation
-  moveTo(x: number, y: number, duration: number = 50): void {
+  moveTo(x: number, y: number, velocityY: number = 0): void {
     if (!this.isLocal) {
-      this.scene.tweens.add({
-        targets: this.container,
-        x,
-        y,
-        duration,
-        ease: 'Linear',
-      });
+      // Calculate implied X velocity based on position change
+      const timeSinceLast = Math.max(1, Date.now() - this.lastUpdate);
+      this.targetVelocityX = (x - this.targetX) / (timeSinceLast / 1000);
+      this.targetVelocityY = velocityY;
+
+      this.targetX = x;
+      this.targetY = y;
+      this.lastUpdate = Date.now();
     }
   }
 
@@ -276,6 +306,8 @@ export class PlayerSprite {
   destroy(): void {
     if (this.isLocal) {
       this.scene.events.off('update', this.updateLabelPosition, this);
+    } else {
+      this.scene.events.off('update', this.updateInterpolation, this);
     }
     this.arrow?.destroy();
     this.container.destroy();

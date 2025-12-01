@@ -10,15 +10,15 @@ export const GAME_CONFIG = {
   JUMP_FORCE: -450,
 
   // Player settings
-  PLAYER_SIZE: 64,
+  PLAYER_SIZE: 48, // Reduced from 64
   PLAYER_SPEED: 300,
 
   // Network settings
-  POSITION_UPDATE_INTERVAL: 50, // ms (20 updates/sec max)
+  POSITION_UPDATE_INTERVAL: 16, // ms (~60 updates/sec)
 
   // Game settings
   DEFAULT_GAME_DURATION: 60, // seconds
-  TAG_COOLDOWN: 500, // ms (no cooldown for debugging)
+  TAG_COOLDOWN: 0, // No cooldown needed with edge detection
 } as const;
 
 export const PLAYER_COLORS = [
