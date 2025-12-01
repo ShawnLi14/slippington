@@ -97,7 +97,7 @@ export class PlayerManager {
     const existing = this.remotePlayers.get(id);
     
     if (existing) {
-      existing.moveTo(data.x, data.y, data.velocity_y);
+      existing.moveTo(data.x, data.y);
       existing.setFacingRight(data.facing_right);
       existing.updateAppearance(data.color, data.is_it);
     } else {
