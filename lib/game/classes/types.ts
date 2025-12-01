@@ -17,9 +17,7 @@ export interface PlayerClass {
 
   abilities: {
     primary: Ability;     // Q key
-    secondary: Ability;   // E key
   };
 }
 
-export type PlayerClassId = 'speedster' | 'tank' | 'trickster';
-
+export type PlayerClassId = 'slipper';

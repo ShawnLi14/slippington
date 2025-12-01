@@ -37,5 +37,5 @@ export interface AbilityState {
   expiresAt?: number;        // When active effect ends
 }
 
-export type AbilitySlot = 'primary' | 'secondary';
+export type AbilitySlot = 'primary';
 

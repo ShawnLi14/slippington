@@ -41,7 +41,7 @@ export class PlayerSprite {
     this.isLocal = config.isLocal;
     this.currentColor = config.color;
     this.currentIsIt = config.isIt;
-    this.classId = config.classId || 'speedster';
+    this.classId = config.classId || 'slipper';
     this.targetX = config.x;
     this.targetY = config.y;
 

@@ -8,7 +8,11 @@ import { CollisionSystem } from '@/lib/phaser/systems/CollisionSystem';
 import { GAME_CONFIG } from '@/lib/game/constants';
 import { Player } from '@/lib/game/types';
 import { MapData } from '@/lib/game/maps';
-import { PlayerClassId } from '@/lib/game/classes';
+import { PlayerClassId, getClass } from '@/lib/game/classes';
+
+// Blink ability constants
+const BLINK_DISTANCE = 150;
+const BLINK_COOLDOWN = 3000; // 3 seconds
 
 /**
  * Main game scene - handles rendering, input, and physics
@@ -19,7 +23,9 @@ export class GameScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private collisionSystem!: CollisionSystem;
 
-  // Remote players map
+  // Entities
+  private localPlayer: PlayerSprite | null = null;
+  private localPlayerId: string | null = null;
   private remotePlayers: Map<string, PlayerSprite> = new Map();
   
   // Track collision state to detect edges (entering collision)
@@ -32,11 +38,20 @@ export class GameScene extends Phaser.Scene {
   // UI elements
   private timerText: Phaser.GameObjects.Text | null = null;
   private gameOverContainer: Phaser.GameObjects.Container | null = null;
+  private abilityUI: {
+    container: Phaser.GameObjects.Container;
+    cooldownBar: Phaser.GameObjects.Rectangle;
+    cooldownText: Phaser.GameObjects.Text;
+    keyText: Phaser.GameObjects.Text;
+  } | null = null;
 
   // Game state
   private unsubscribeStore: (() => void) | null = null;
   private tagCooldown: number = 0;
   private gameEnded: boolean = false;
+  
+  // Ability state
+  private abilityCooldown: number = 0;
 
   constructor() {
     super('GameScene');
@@ -46,6 +61,7 @@ export class GameScene extends Phaser.Scene {
     // Reset state
     this.gameEnded = false;
     this.tagCooldown = 0;
+    this.abilityCooldown = 0;
 
     // Initialize systems
     this.inputSystem = new InputSystem(this);
@@ -68,8 +84,9 @@ export class GameScene extends Phaser.Scene {
     border.lineStyle(4, 0x4ecdc4, 0.3);
     border.strokeRect(2, 2, GAME_CONFIG.MAP_WIDTH - 4, GAME_CONFIG.MAP_HEIGHT - 4);
 
-    // Create timer UI
+    // Create UI
     this.createTimerUI();
+    this.createAbilityUI();
 
     // Loading text
     const loadingText = this.add.text(
@@ -114,9 +131,12 @@ export class GameScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (!this.localPlayer || !this.localPlayerId || this.gameEnded) return;
 
-    // Update tag cooldown
+    // Update cooldowns
     if (this.tagCooldown > 0) {
       this.tagCooldown -= delta;
+    }
+    if (this.abilityCooldown > 0) {
+      this.abilityCooldown -= delta;
     }
 
     // Handle input
@@ -127,8 +147,9 @@ export class GameScene extends Phaser.Scene {
       this.checkTagging();
     }
 
-    // Update timer display
+    // Update UI
     this.updateTimerDisplay();
+    this.updateAbilityUI();
 
     // Sync position to server
     gameManager.updatePosition(
@@ -161,6 +182,83 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
       fontStyle: 'bold',
     }).setOrigin(0.5);
+  }
+
+  private createAbilityUI(): void {
+    // Position at bottom-right of screen
+    const x = GAME_CONFIG.MAP_WIDTH - 100;
+    const y = GAME_CONFIG.MAP_HEIGHT - 80;
+
+    const container = this.add.container(x, y);
+
+    // Background
+    const bg = this.add.rectangle(0, 0, 80, 80, 0x000000, 0.7);
+    bg.setStrokeStyle(2, 0x4ecdc4);
+    container.add(bg);
+
+    // Ability name
+    const nameText = this.add.text(0, -25, 'BLINK', {
+      fontSize: '12px',
+      color: '#4ecdc4',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    container.add(nameText);
+
+    // Cooldown bar background
+    const barBg = this.add.rectangle(0, 5, 60, 8, 0x333333);
+    container.add(barBg);
+
+    // Cooldown bar fill
+    const cooldownBar = this.add.rectangle(-30, 5, 60, 8, 0x4ecdc4);
+    cooldownBar.setOrigin(0, 0.5);
+    container.add(cooldownBar);
+
+    // Cooldown text
+    const cooldownText = this.add.text(0, 5, 'READY', {
+      fontSize: '10px',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    container.add(cooldownText);
+
+    // Key hint
+    const keyText = this.add.text(0, 28, '[Q]', {
+      fontSize: '14px',
+      color: '#888888',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    container.add(keyText);
+
+    this.abilityUI = {
+      container,
+      cooldownBar,
+      cooldownText,
+      keyText,
+    };
+  }
+
+  private updateAbilityUI(): void {
+    if (!this.abilityUI) return;
+
+    const { cooldownBar, cooldownText, keyText } = this.abilityUI;
+
+    if (this.abilityCooldown > 0) {
+      // On cooldown
+      const progress = 1 - (this.abilityCooldown / BLINK_COOLDOWN);
+      cooldownBar.width = 60 * progress;
+      cooldownBar.setFillStyle(0x666666);
+      
+      const secondsLeft = Math.ceil(this.abilityCooldown / 1000);
+      cooldownText.setText(`${secondsLeft}s`);
+      cooldownText.setColor('#ff6666');
+      keyText.setColor('#444444');
+    } else {
+      // Ready
+      cooldownBar.width = 60;
+      cooldownBar.setFillStyle(0x4ecdc4);
+      cooldownText.setText('READY');
+      cooldownText.setColor('#4ecdc4');
+      keyText.setColor('#4ecdc4');
+    }
   }
 
   private updateTimerDisplay(): void {
@@ -207,6 +305,70 @@ export class GameScene extends Phaser.Scene {
     if (this.inputSystem.isJumpJustPressed() && this.localPlayer!.isOnGround()) {
       this.localPlayer!.jump();
     }
+
+    // Ability (Q key)
+    if (input.primaryAbility) {
+      this.useAbility();
+    }
+  }
+
+  private useAbility(): void {
+    if (!this.localPlayer || this.abilityCooldown > 0) return;
+
+    // Set cooldown
+    this.abilityCooldown = BLINK_COOLDOWN;
+
+    // Calculate blink destination
+    const direction = this.localPlayer.facingRight ? 1 : -1;
+    let targetX = this.localPlayer.x + (BLINK_DISTANCE * direction);
+    
+    // Clamp to world bounds
+    targetX = Phaser.Math.Clamp(
+      targetX, 
+      GAME_CONFIG.PLAYER_SIZE / 2, 
+      GAME_CONFIG.MAP_WIDTH - GAME_CONFIG.PLAYER_SIZE / 2
+    );
+
+    // Store original position for effect
+    const startX = this.localPlayer.x;
+    const startY = this.localPlayer.y;
+
+    // Teleport player
+    this.localPlayer.gameObject.setPosition(targetX, this.localPlayer.y);
+
+    // Visual effect - trail
+    this.showBlinkEffect(startX, startY, targetX, this.localPlayer.y);
+  }
+
+  private showBlinkEffect(fromX: number, fromY: number, toX: number, toY: number): void {
+    // Create trail particles
+    const numParticles = 8;
+    for (let i = 0; i < numParticles; i++) {
+      const t = i / numParticles;
+      const x = Phaser.Math.Linear(fromX, toX, t);
+      const y = Phaser.Math.Linear(fromY, toY, t);
+      
+      const particle = this.add.circle(x, y, 6, 0x4ecdc4, 0.8);
+      
+      this.tweens.add({
+        targets: particle,
+        alpha: 0,
+        scale: 0.2,
+        duration: 300,
+        delay: i * 20,
+        onComplete: () => particle.destroy(),
+      });
+    }
+
+    // Flash at destination
+    const flash = this.add.circle(toX, toY, 20, 0x4ecdc4, 0.6);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 2,
+      duration: 200,
+      onComplete: () => flash.destroy(),
+    });
   }
 
   private checkTagging(): void {
@@ -424,7 +586,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createLocalPlayer(data: Player): void {
-    const classId = (data.class_id as PlayerClassId) || 'speedster';
+    const classId = (data.class_id as PlayerClassId) || 'slipper';
     
     this.localPlayer = new PlayerSprite({
       scene: this,
@@ -448,7 +610,7 @@ export class GameScene extends Phaser.Scene {
       existing.setFacingRight(data.facing_right);
       existing.updateAppearance(data.color, data.is_it);
     } else {
-      const classId = (data.class_id as PlayerClassId) || 'speedster';
+      const classId = (data.class_id as PlayerClassId) || 'slipper';
       
       const sprite = new PlayerSprite({
         scene: this,

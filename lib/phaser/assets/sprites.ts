@@ -15,28 +15,16 @@ export interface SpriteSheetConfig {
  */
 export const SPRITE_SHEETS: SpriteSheetConfig[] = [
   {
-    key: 'speedster',
-    path: '/assets/sprites/speedster.png',
-    frameWidth: 48,
-    frameHeight: 48,
-  },
-  {
-    key: 'tank',
-    path: '/assets/sprites/tank.png',
-    frameWidth: 48,
-    frameHeight: 48,
-  },
-  {
-    key: 'trickster',
-    path: '/assets/sprites/trickster.png',
-    frameWidth: 48,
-    frameHeight: 48,
+    key: 'slipper',
+    path: '/assets/sprites/slipper.png',
+    frameWidth: 32,
+    frameHeight: 32,
   },
   {
     key: 'default',
     path: '/assets/sprites/default.png',
-    frameWidth: 48,
-    frameHeight: 48,
+    frameWidth: 32,
+    frameHeight: 32,
   },
 ];
 
@@ -58,11 +46,5 @@ export const IMAGES: ImageConfig[] = [
  * Ability icons
  */
 export const ABILITY_ICONS: ImageConfig[] = [
-  { key: 'ability_dash', path: '/assets/icons/dash.png' },
-  { key: 'ability_speed', path: '/assets/icons/speed.png' },
-  { key: 'ability_shield', path: '/assets/icons/shield.png' },
-  { key: 'ability_pound', path: '/assets/icons/pound.png' },
-  { key: 'ability_decoy', path: '/assets/icons/decoy.png' },
-  { key: 'ability_teleport', path: '/assets/icons/teleport.png' },
+  { key: 'ability_blink', path: '/assets/icons/blink.png' },
 ];
-

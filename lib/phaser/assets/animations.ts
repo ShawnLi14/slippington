@@ -8,7 +8,7 @@ import { CharacterAnimations, AnimationState } from '../systems/AnimationSystem'
  * Row 2: Jump (frames 10-12)
  * Row 3: Fall (frames 13-15)
  * Row 4: Land (frames 16-17)
- * Row 5: Abilities (frames 18-23)
+ * Row 5: Abilities (frames 18-20)
  */
 
 const DEFAULT_ANIMATIONS: Record<AnimationState, { start: number; end: number; frameRate: number; repeat: number }> = {
@@ -18,7 +18,6 @@ const DEFAULT_ANIMATIONS: Record<AnimationState, { start: number; end: number; f
   fall: { start: 13, end: 15, frameRate: 8, repeat: -1 },
   land: { start: 16, end: 17, frameRate: 12, repeat: 0 },
   ability_primary: { start: 18, end: 20, frameRate: 15, repeat: 0 },
-  ability_secondary: { start: 21, end: 23, frameRate: 15, repeat: 0 },
 };
 
 function createAnimationConfig(state: AnimationState, key: string) {
@@ -35,55 +34,24 @@ function createAnimationConfig(state: AnimationState, key: string) {
  * Animation configurations for each character class
  */
 export const CHARACTER_ANIMATIONS: Record<string, CharacterAnimations> = {
-  speedster: {
-    spriteSheet: 'speedster',
-    frameWidth: 48,
-    frameHeight: 48,
+  slipper: {
+    spriteSheet: 'slipper',
+    frameWidth: 32,
+    frameHeight: 32,
     animations: {
-      idle: createAnimationConfig('idle', 'speedster'),
-      run: createAnimationConfig('run', 'speedster'),
-      jump: createAnimationConfig('jump', 'speedster'),
-      fall: createAnimationConfig('fall', 'speedster'),
-      land: createAnimationConfig('land', 'speedster'),
-      ability_primary: createAnimationConfig('ability_primary', 'speedster'),
-      ability_secondary: createAnimationConfig('ability_secondary', 'speedster'),
-    },
-  },
-
-  tank: {
-    spriteSheet: 'tank',
-    frameWidth: 48,
-    frameHeight: 48,
-    animations: {
-      idle: createAnimationConfig('idle', 'tank'),
-      run: createAnimationConfig('run', 'tank'),
-      jump: createAnimationConfig('jump', 'tank'),
-      fall: createAnimationConfig('fall', 'tank'),
-      land: createAnimationConfig('land', 'tank'),
-      ability_primary: createAnimationConfig('ability_primary', 'tank'),
-      ability_secondary: createAnimationConfig('ability_secondary', 'tank'),
-    },
-  },
-
-  trickster: {
-    spriteSheet: 'trickster',
-    frameWidth: 48,
-    frameHeight: 48,
-    animations: {
-      idle: createAnimationConfig('idle', 'trickster'),
-      run: createAnimationConfig('run', 'trickster'),
-      jump: createAnimationConfig('jump', 'trickster'),
-      fall: createAnimationConfig('fall', 'trickster'),
-      land: createAnimationConfig('land', 'trickster'),
-      ability_primary: createAnimationConfig('ability_primary', 'trickster'),
-      ability_secondary: createAnimationConfig('ability_secondary', 'trickster'),
+      idle: createAnimationConfig('idle', 'slipper'),
+      run: createAnimationConfig('run', 'slipper'),
+      jump: createAnimationConfig('jump', 'slipper'),
+      fall: createAnimationConfig('fall', 'slipper'),
+      land: createAnimationConfig('land', 'slipper'),
+      ability_primary: createAnimationConfig('ability_primary', 'slipper'),
     },
   },
 
   default: {
     spriteSheet: 'default',
-    frameWidth: 48,
-    frameHeight: 48,
+    frameWidth: 32,
+    frameHeight: 32,
     animations: {
       idle: createAnimationConfig('idle', 'default'),
       run: createAnimationConfig('run', 'default'),
@@ -91,7 +59,6 @@ export const CHARACTER_ANIMATIONS: Record<string, CharacterAnimations> = {
       fall: createAnimationConfig('fall', 'default'),
       land: createAnimationConfig('land', 'default'),
       ability_primary: createAnimationConfig('ability_primary', 'default'),
-      ability_secondary: createAnimationConfig('ability_secondary', 'default'),
     },
   },
 };
@@ -99,4 +66,3 @@ export const CHARACTER_ANIMATIONS: Record<string, CharacterAnimations> = {
 export function getCharacterAnimations(classId: string): CharacterAnimations {
   return CHARACTER_ANIMATIONS[classId] ?? CHARACTER_ANIMATIONS.default;
 }
-

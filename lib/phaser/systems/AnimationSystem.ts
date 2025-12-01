@@ -9,8 +9,7 @@ export type AnimationState =
   | 'jump'
   | 'fall'
   | 'land'
-  | 'ability_primary'
-  | 'ability_secondary';
+  | 'ability_primary';
 
 /**
  * Animation configuration for a sprite sheet

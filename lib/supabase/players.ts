@@ -41,7 +41,7 @@ export const PlayersService = {
   },
 
   async create(options: CreatePlayerOptions): Promise<Player> {
-    const { gameId, userId, classId = 'speedster', spawnX, spawnY, isFirstPlayer = false } = options;
+    const { gameId, userId, classId = 'slipper', spawnX, spawnY, isFirstPlayer = false } = options;
     
     const insertData: PlayerInsert = {
       game_id: gameId,

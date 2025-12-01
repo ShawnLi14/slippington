@@ -10,7 +10,7 @@ interface MainMenuProps {
 }
 
 export default function MainMenu({ onStartGame }: MainMenuProps) {
-  const [selectedClassId, setSelectedClassId] = useState<PlayerClassId>('speedster');
+  const [selectedClassId, setSelectedClassId] = useState<PlayerClassId>('slipper');
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [games, setGames] = useState<GameWithPlayerCount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,9 +41,7 @@ export default function MainMenu({ onStartGame }: MainMenuProps) {
   }
 
   const classColors: Record<string, string> = {
-    speedster: '#4ecdc4',
-    tank: '#ff6b6b',
-    trickster: '#a29bfe',
+    slipper: '#4ecdc4',
   };
 
   return (
@@ -153,6 +151,8 @@ function ClassCard({
   color: string;
   onClick: () => void;
 }) {
+  const ability = playerClass.abilities.primary;
+  
   return (
     <button
       onClick={onClick}
@@ -174,31 +174,14 @@ function ClassCard({
           <h3 className="font-bold text-sm">{playerClass.name.toUpperCase()}</h3>
           <p className="text-xs text-gray-400 mt-1 line-clamp-2">{playerClass.description}</p>
           
-          {/* Stats */}
-          <div className="flex gap-4 mt-3">
-            <StatBar label="SPD" value={playerClass.stats.speed} color={color} />
-            <StatBar label="JMP" value={playerClass.stats.jumpForce} color={color} />
+          {/* Ability */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-[10px] text-gray-500">ABILITY:</span>
+            <span className="text-xs font-medium" style={{ color }}>{ability.name}</span>
           </div>
         </div>
       </div>
     </button>
-  );
-}
-
-function StatBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] text-gray-500 w-6">{label}</span>
-      <div className="w-12 h-1.5 bg-[#0a0a12] rounded-full overflow-hidden">
-        <div 
-          className="h-full rounded-full transition-all"
-          style={{ 
-            width: `${Math.min(value / 1.5, 1) * 100}%`,
-            backgroundColor: color,
-          }}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -238,4 +221,3 @@ function GameCard({
     </button>
   );
 }
-

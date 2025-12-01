@@ -25,7 +25,7 @@ export class GameManager {
   async joinOrCreateGame(existingGameId?: string | null): Promise<{ gameId: string; playerId: string; mapData: MapData }> {
     const userId = getUserId();
     const store = useGameStore.getState();
-    const selectedClass = (store.selectedClass as PlayerClassId) || 'speedster';
+    const selectedClass = (store.selectedClass as PlayerClassId) || 'slipper';
 
     let game;
     let isFirstPlayer = false;

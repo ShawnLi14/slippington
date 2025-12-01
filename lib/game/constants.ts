@@ -10,7 +10,7 @@ export const GAME_CONFIG = {
   JUMP_FORCE: -450,
 
   // Player settings
-  PLAYER_SIZE: 48, // Reduced from 64
+  PLAYER_SIZE: 40, // Reduced from 48
   PLAYER_SPEED: 300,
 
   // Network settings

@@ -30,7 +30,7 @@ CREATE TABLE players (
   y INTEGER DEFAULT 300,
   velocity_y INTEGER DEFAULT 0,
   color TEXT DEFAULT '#96ceb4',
-  class_id TEXT DEFAULT 'speedster',
+  class_id TEXT DEFAULT 'slipper',
   facing_right BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
