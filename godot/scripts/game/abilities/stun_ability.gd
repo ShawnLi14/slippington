@@ -5,7 +5,7 @@ extends Ability
 ## reliable apply_stun RPC — each peer owns its own body, so targets freeze
 ## themselves. Fine for a friendly game; not cheat-proof by design.
 
-const RADIUS := 120.0
+const RADIUS := 150.0
 const STUN_DURATION := 1.5
 
 
@@ -18,7 +18,7 @@ func _init() -> void:
 
 
 func execute(player: Node) -> bool:
-	player.spawn_pulse_ring(RADIUS)
+	player.spawn_stun_burst(RADIUS)
 	var game := player.get_parent()
 	for other in game.get_children():
 		if other == player or not other.is_in_group("players"):
@@ -29,4 +29,4 @@ func execute(player: Node) -> bool:
 
 
 func play_remote_vfx(player: Node) -> void:
-	player.spawn_pulse_ring(RADIUS)
+	player.spawn_stun_burst(RADIUS)

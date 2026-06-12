@@ -406,7 +406,7 @@ func play_remote_ability(ability_id: String) -> void:
 		"blink":
 			flash_ability_vfx(ability_id)
 		"stun":
-			spawn_pulse_ring(StunAbility.RADIUS)
+			spawn_stun_burst(StunAbility.RADIUS)
 		"swap":
 			spawn_pulse_ring(50.0)
 		"dash":
@@ -433,6 +433,18 @@ func spawn_pulse_ring(radius: float) -> void:
 	ring.max_radius = radius
 	ring.ring_color = color
 	get_parent().add_child(ring)
+
+
+## Stun AoE: unlike the thin pulse ring, this fills the whole affected disc
+## and holds it at full radius for a beat, so victims (and the Anchor) can
+## see exactly who was in range. Targets are picked at cast time, so the
+## visual must reach full size near-instantly to be honest.
+func spawn_stun_burst(radius: float) -> void:
+	var burst := StunBurst.new()
+	burst.global_position = global_position
+	burst.max_radius = radius
+	burst.ring_color = color
+	get_parent().add_child(burst)
 
 
 func _make_ghost(at: Vector2) -> Node2D:
@@ -500,3 +512,36 @@ class PulseRing:
 
 	func _draw() -> void:
 		draw_arc(Vector2.ZERO, max_radius * _progress, 0.0, TAU, 48, Color(ring_color, 1.0 - _progress), 4.0)
+
+
+## Stun AoE visual: fast expand (0.15s) -> hold the filled disc at full
+## radius (0.4s) -> fade (0.3s).
+class StunBurst:
+	extends Node2D
+	var max_radius := 150.0
+	var ring_color := Color.WHITE
+	var _radius_frac := 0.0
+	var _alpha := 1.0
+
+	func _ready() -> void:
+		var tween := create_tween()
+		tween.tween_method(_set_radius, 0.0, 1.0, 0.15)
+		tween.tween_interval(0.4)
+		tween.tween_method(_set_alpha, 1.0, 0.0, 0.3)
+		tween.tween_callback(queue_free)
+
+	func _set_radius(v: float) -> void:
+		_radius_frac = v
+		queue_redraw()
+
+	func _set_alpha(v: float) -> void:
+		_alpha = v
+		queue_redraw()
+
+	func _draw() -> void:
+		var r := max_radius * _radius_frac
+		draw_circle(Vector2.ZERO, r, Color(ring_color, 0.18 * _alpha))
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(ring_color, 0.9 * _alpha), 5.0)
+		# Inner echo ring so the boundary still reads over busy backgrounds.
+		if r > 24.0:
+			draw_arc(Vector2.ZERO, r - 12.0, 0.0, TAU, 64, Color(1, 1, 1, 0.35 * _alpha), 2.0)

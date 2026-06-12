@@ -20,7 +20,7 @@ RULES
   One player is IT (red arrow). Tag someone by touching them.
   The first tag starts a 60-second clock.
   Whoever is IT when the clock hits zero LOSES - everyone else survives.
-  Q uses your class ability. Move: WASD/arrows, jump: space/W/up,
+  J uses your class ability. Move: WASD/arrows, jump: space/W/up,
   drop through dashed platforms: hold down + jump.
 
 If joining by code fails ("connection blocked by network"), one player's

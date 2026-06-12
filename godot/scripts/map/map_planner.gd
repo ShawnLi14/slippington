@@ -9,8 +9,9 @@ class_name MapPlanner
 ## Pure functions over map-data dictionaries — no scene or autoload
 ## dependencies, so headless tests can run it directly.
 
-# Conservative physics: the slowest class (0.9x speed) with the lowest
-# jump (1.0x) must be able to traverse everything.
+# Conservative physics: every class now runs at 1.1x (330), but planning
+# with the old 0.9x speed keeps a safety margin AND keeps existing seeds
+# generating identical maps — raise only with a deliberate map reroll.
 const SPEED := 270.0
 const JUMP_V := 450.0
 const SPRING_V := 780.0

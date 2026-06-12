@@ -68,7 +68,7 @@ func _ready() -> void:
 	_class_picker.custom_minimum_size = Vector2(200, 40)
 	var classes := ClassRegistry.all()
 	for i in classes.size():
-		_class_picker.add_item("%s  (Q: %s)" % [classes[i].display_name, classes[i].primary_ability.display_name])
+		_class_picker.add_item("%s  (J: %s)" % [classes[i].display_name, classes[i].primary_ability.display_name])
 		if classes[i].id == GameState.local_class_id:
 			_class_picker.select(i)
 	_class_picker.item_selected.connect(_on_class_selected)

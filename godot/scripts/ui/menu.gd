@@ -218,7 +218,7 @@ func _make_class_card(player_class: PlayerClass) -> Button:
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(190, 0)
 	content.add_child(desc)
-	var ability := UiTheme.label("Q · %s" % player_class.primary_ability.display_name, 14, UiTheme.TEAL)
+	var ability := UiTheme.label("J · %s" % player_class.primary_ability.display_name, 14, UiTheme.TEAL)
 	ability.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(ability)
 	return card

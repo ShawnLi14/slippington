@@ -18,11 +18,11 @@ instant restarts, maximum yelling.
 
 Pick your character:
 
-| Class | Style | Q ability |
+| Class | Style | J ability |
 |---|---|---|
-| **Slipper** | Fast and slippery | **Blink** — teleport ahead, mid-chase |
+| **Slipper** | Light and springy | **Blink** — teleport ahead, mid-chase |
 | **Swapper** | Unpredictable | **Swap** — trade places with the nearest player |
-| **Anchor** | Slow, mighty, vindictive | **Stun Pulse** — freeze everyone nearby |
+| **Anchor** | Heavy, mighty, vindictive | **Stun Pulse** — freeze everyone nearby |
 
 Every map is procedurally generated from a shared seed (plus two
 hand-built arenas), with drop-through platforms, drifting clouds, and a

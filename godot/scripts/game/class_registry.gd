@@ -24,15 +24,18 @@ static func get_class_by_id(id: String) -> PlayerClass:
 static func _ensure_loaded() -> void:
 	if not _classes.is_empty():
 		return
+	# All classes share one run speed (1.1 = the midpoint of the old
+	# slipper 1.3 / anchor 0.9 spread) — identity comes from jump, mass,
+	# and ability, so no class wins a flat chase by stat alone.
 	_classes["slipper"] = PlayerClass.new(
 		"slipper", "Slipper", "Slippery and elusive. Hard to catch.",
-		1.3, 1.1, 0.8, BlinkAbility.new()
+		1.1, 1.1, 0.8, BlinkAbility.new()
 	)
 	_classes["swapper"] = PlayerClass.new(
 		"swapper", "Swapper", "Unpredictable. Trades places in a blink.",
-		1.15, 1.0, 1.0, SwapAbility.new()
+		1.1, 1.0, 1.0, SwapAbility.new()
 	)
 	_classes["anchor"] = PlayerClass.new(
-		"anchor", "Anchor", "Slow but mighty. Stops runners cold.",
-		0.9, 1.2, 1.4, StunAbility.new()
+		"anchor", "Anchor", "Heavy and mighty. Stops runners cold.",
+		1.1, 1.2, 1.4, StunAbility.new()
 	)
