@@ -33,6 +33,10 @@ const LANDMARK_TOP := 640.0
 ## the first four, so every map is missing a different one.
 const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast"]
 
+## Debug/test hook: when true, generate() returns the raw map without the
+## planner's validation/repair pass.
+static var skip_plan := false
+
 ## Widest half-extent of each landmark's platforms, used to keep the whole
 ## structure GameConfig.PLATFORM_GAP clear of the map border and of the
 ## neighboring column's landmark. The worst four of these plus five gaps
@@ -210,22 +214,66 @@ static func generate(seed_string: String) -> Dictionary:
 				rect.position.x + rect.size.x * rng.next_float(0.25, 0.75),
 				rect.position.y - 7.0)})
 
-	# 1-2 connector platforms patrol horizontally: routes that come and go.
-	var movers := 0
+	# Moving platforms: 2-3 guaranteed per map (when candidates exist).
+	# Band-limited so a patrol never hugs the top edge of the map, and the
+	# amplitude is clamped to the border gap up front instead of relying on
+	# the planner to strip violators afterwards.
+	var mover_candidates: Array = []
 	for p in platforms:
-		if movers >= 2:
-			break
 		var rect: Rect2 = p["rect"]
-		if p["type"] == "solid" and not p.get("thru", false) and not p.has("move") and not p.has("ramp") \
-				and rect.size.x >= 140.0 and rect.size.x <= 220.0 \
-				and rect.position.y < LANDMARK_TOP and rng.next() < 0.35:
-			p["move"] = {
-				"axis": "x",
-				"amplitude": rng.next_float(110.0, 180.0),
-				"period": rng.next_float(6.0, 9.0),
-				"phase": rng.next_float(0.0, 1.0),
-			}
-			movers += 1
+		if p["type"] != "solid" or p.get("thru", false) or p.has("move") or p.has("ramp") \
+				or rect.size.x < 140.0 or rect.size.x > 280.0 \
+				or rect.position.y < 200.0 or rect.position.y > LANDMARK_TOP:
+			continue
+		# Connectors only — landmark pieces (e.g. the mast's crow's nest)
+		# must not wander off their structure.
+		var in_landmark := false
+		for box in landmark_boxes:
+			if box.intersects(rect):
+				in_landmark = true
+				break
+		if not in_landmark:
+			mover_candidates.append(p)
+	# Keep drawing until the target is met — a candidate too hemmed in to
+	# patrol (clamped amplitude under 60) is discarded, not counted.
+	var mover_target := rng.next_int(2, 3)
+	var movers_assigned := 0
+	while movers_assigned < mover_target and not mover_candidates.is_empty():
+		var pick := rng.next_int(0, mover_candidates.size() - 1)
+		var p: Dictionary = mover_candidates[pick]
+		mover_candidates.remove_at(pick)
+		var rect: Rect2 = p["rect"]
+		var max_amp := minf(rect.position.x - GameConfig.PLATFORM_GAP,
+			float(width) - GameConfig.PLATFORM_GAP - rect.end.x)
+		# Also clear of same-layer neighbors across the whole patrol, so the
+		# planner doesn't have to strip the mover afterwards.
+		for q in platforms:
+			if q == p:
+				continue
+			var qr: Rect2 = q["rect"]
+			if absf(qr.position.y - rect.position.y) > 60.0:
+				continue
+			if qr.end.x <= rect.position.x:
+				max_amp = minf(max_amp, rect.position.x - qr.end.x - 12.0)
+			elif qr.position.x >= rect.end.x:
+				max_amp = minf(max_amp, qr.position.x - rect.end.x - 12.0)
+		if max_amp < 60.0:
+			continue
+		# A patrol widens this platform's blocker footprint to its whole
+		# sweep, which can sever jump arcs that route past it. Only keep the
+		# mover if the map stays exactly as reachable as before.
+		var probe := {"width": width, "height": height, "platforms": platforms, "objects": objects}
+		var base_unreachable: int = MapPlanner._unreachable_surfaces(probe).size()
+		p["move"] = {
+			"axis": "x",
+			"amplitude": minf(rng.next_float(110.0, 180.0), max_amp),
+			"period": rng.next_float(6.0, 9.0),
+			"phase": rng.next_float(0.0, 1.0),
+		}
+		if MapPlanner._unreachable_surfaces(probe).size() > base_unreachable:
+			p.erase("move")
+			continue
+		movers_assigned += 1
 
 	# A portal pair linking the far-left floor to a high perch on the right
 	# half (or vice versa) — the cross-map escape hatch.
@@ -281,6 +329,8 @@ static func generate(seed_string: String) -> Dictionary:
 	}
 	# Post-pass: traversal-graph validation and deterministic repair —
 	# everything must actually be reachable with real jump physics.
+	if skip_plan:
+		return map  # debug/tests: inspect the raw map before repairs
 	return MapPlanner.plan(map, rng)
 
 

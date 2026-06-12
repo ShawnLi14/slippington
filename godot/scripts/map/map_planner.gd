@@ -20,6 +20,12 @@ const EDGE_MARGIN := 20.0      # required slack on horizontal reach
 const HEIGHT_MARGIN := 6.0     # required slack on vertical reach
 const BLOCK_INFLATE := 10.0    # blocker rects grow by this for the player's body
 const REPAIR_PASSES := 3
+## A cut vertex only counts as a bottleneck when it gates this many
+## surfaces. Ladder structures (mast, scaffold) are cut-vertex chains by
+## design, and a one-or-two-perch dead end is fine — you can always drop
+## off. The rule exists to stop a chaser camping the only way into a
+## whole REGION.
+const MIN_BOTTLENECK_ORPHANS := 3
 
 
 static func jump_height() -> float:
@@ -349,7 +355,7 @@ static func _find_bottlenecks(map: Dictionary) -> Array:
 		for i in graph["surfaces"].size():
 			if i != v and base[i] and not without[i]:
 				orphans.append(graph["surfaces"][i])
-		if not orphans.is_empty():
+		if orphans.size() >= MIN_BOTTLENECK_ORPHANS:
 			out.append({"cut": graph["surfaces"][v], "orphans": orphans})
 	out.sort_custom(func(a, b): return a["orphans"].size() > b["orphans"].size())
 	return out
@@ -372,10 +378,16 @@ static func _repair_surface(map: Dictionary, surf: Dictionary, rng: SeededRng) -
 	var reachable := _reachable_set(map)
 	if surf in reachable or reachable.is_empty():
 		return
-	var anchor = _nearest(reachable, surf)
-	if anchor != null:
-		_try_connect(map, anchor, surf, rng)
-	# On failure the delete pass cleans it up.
+	# Try the three nearest reachable anchors, not just one — a failed
+	# repair means deletion, and deletions cascade (each one can orphan
+	# more surfaces), so repair success is worth the extra attempts.
+	var pool := reachable.duplicate()
+	var c: Vector2 = surf["rect"].get_center()
+	pool.sort_custom(func(a, b):
+		return a["rect"].get_center().distance_to(c) < b["rect"].get_center().distance_to(c))
+	for i in mini(3, pool.size()):
+		if _try_connect(map, pool[i], surf, rng):
+			return
 
 
 static func _nearest(pool: Array, surf: Dictionary):
@@ -398,11 +410,11 @@ static func _try_connect(map: Dictionary, anchor: Dictionary, target: Dictionary
 	var blockers := _blockers(map)
 
 	var mid := (anchor_rect.get_center() + target_rect.get_center()) / 2.0
-	for attempt in 4:
-		var w := 180.0
-		var x := clampf(mid.x - w / 2.0 + rng.next_float(-70.0, 70.0),
+	for attempt in 8:
+		var w := 150.0
+		var x := clampf(mid.x - w / 2.0 + rng.next_float(-120.0, 120.0),
 			GameConfig.PLATFORM_GAP, GameConfig.MAP_WIDTH - w - GameConfig.PLATFORM_GAP)
-		var y := clampf(mid.y + rng.next_float(-40.0, 40.0), 90.0, GameConfig.MAP_HEIGHT - 120.0)
+		var y := clampf(mid.y + rng.next_float(-70.0, 70.0), 90.0, GameConfig.MAP_HEIGHT - 120.0)
 		var rect := Rect2(x, y, w, 16.0)
 		var collides := false
 		for p in map["platforms"]:
@@ -413,7 +425,9 @@ static func _try_connect(map: Dictionary, anchor: Dictionary, target: Dictionary
 				break
 		if collides:
 			continue
-		var step := {"rect": rect, "type": "solid"}
+		# Repair steps are thru: landable, but they never block anyone
+		# else's arcs — so one repair can't sabotage the next.
+		var step := {"rect": rect, "type": "solid", "thru": true}
 		map["platforms"].append(step)
 		if _edge_ok(anchor, step, _blockers(map)) and _edge_ok(step, target, _blockers(map)):
 			return true
