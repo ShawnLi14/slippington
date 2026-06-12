@@ -118,6 +118,7 @@ func _island_layer(rng: RandomNumberGenerator) -> BgLayer:
 	for i in count:
 		layer.elements.append({
 			"type": "island",
+			"seed": rng.randi(),
 			"x": -150.0 + step * i + rng.randf_range(-50.0, 50.0),
 			"y": rng.randf_range(180.0, 600.0),
 			"w": rng.randf_range(120.0, 250.0),
@@ -144,6 +145,7 @@ func _cloud_layer(rng: RandomNumberGenerator, count: int, scale: float,
 	for i in count:
 		layer.elements.append({
 			"type": "cloud",
+			"seed": rng.randi(),
 			"x": -200.0 + step * i + rng.randf_range(-80.0, 80.0),
 			"y": rng.randf_range(80.0, MAP_H * 0.5),
 			"scale": scale * rng.randf_range(0.8, 1.3),
