@@ -11,6 +11,7 @@ var _ability_name: Label
 var _ability_key: Label
 var _cooldown_fill: ColorRect
 var _flash_label: Label
+var _slush_warned := false
 
 const TEAL := Color("#4ecdc4")
 const RED := Color("#ff6b6b")
@@ -91,6 +92,14 @@ func _process(_delta: float) -> void:
 		_timer_label.add_theme_color_override("font_color", RED if remaining <= 10 else Color.WHITE)
 		var me_it := GameState.it_peer == multiplayer.get_unique_id()
 		_status_label.text = "RUN — you're IT!" if me_it else "Don't get tagged!"
+		if not _slush_warned and float(remaining) <= GameConfig.SLUSH_FINAL_SEC:
+			_slush_warned = true
+			_flash_label.text = "THE SLUSH IS RISING!"
+			_flash_label.add_theme_color_override("font_color", TEAL)
+			_flash_label.modulate.a = 1.0
+			var tween := create_tween()
+			tween.tween_interval(1.0)
+			tween.tween_property(_flash_label, "modulate:a", 0.0, 0.5)
 	else:
 		_timer_label.text = "%d player%s" % [GameState.players.size(), "" if GameState.players.size() == 1 else "s"]
 		_status_label.text = "First tag starts the clock"

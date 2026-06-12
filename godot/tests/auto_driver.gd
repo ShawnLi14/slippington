@@ -23,6 +23,8 @@ var bot_style := "simple"
 var bot_class := ""
 
 var map_choice := "arena"
+var shot_event := "tag"
+var _event_shot_taken := false
 
 var _jump_cooldown := 0.0
 var _ability_timer := 0.0
@@ -55,6 +57,8 @@ func _ready() -> void:
 			bot_style = arg.trim_prefix("--bot-style=")
 		elif arg.begins_with("--map="):
 			map_choice = arg.trim_prefix("--map=")
+		elif arg.begins_with("--shot-event="):
+			shot_event = arg.trim_prefix("--shot-event=")
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
 		elif arg.begins_with("--match-seconds="):
@@ -98,8 +102,14 @@ func _ready() -> void:
 			_pass("tag_back")
 		print("[bot %s] tag: %d -> %d" % [mode, old_it, new_it])
 		# Visual-check mode: capture the tag presentation mid-effect.
-		if mode == "host" and code_file.ends_with(".png") and _tag_count == 2:
+		if mode == "host" and code_file.ends_with(".png") and shot_event == "tag" and _tag_count == 2:
 			_take_screenshot(0.12)
+	)
+	GameState.match_timer_updated.connect(func(remaining):
+		if mode == "host" and code_file.ends_with(".png") and shot_event == "slush" \
+				and remaining <= 6.0 and not _event_shot_taken:
+			_event_shot_taken = true
+			_take_screenshot(0.2)
 	)
 	GameState.match_started.connect(func(_remaining): _pass("timer_started"))
 	GameState.ability_fired.connect(func(peer_id, ability_id):
