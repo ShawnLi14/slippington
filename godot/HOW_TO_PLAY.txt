@@ -1,0 +1,28 @@
+SLIPPINGTON — multiplayer tag
+==============================
+
+WINDOWS: unzip, double-click Slippington.exe.
+  (Keep the .dll in the same folder as the exe.)
+  If Windows SmartScreen warns: More info -> Run anyway.
+
+MAC: unzip, then RIGHT-CLICK Slippington.app -> Open -> Open.
+  (Needed the first time because the app isn't signed by Apple.)
+  If macOS only offers "Move to Trash": click Done/Cancel, open
+  System Settings -> Privacy & Security, scroll down, click
+  "Open Anyway" next to Slippington, then confirm.
+
+PLAYING ONLINE
+  One player: pick a name + class -> CREATE GAME -> share the 5-letter code.
+  Everyone else: enter the code -> JOIN -> click READY.
+  Host picks a map and hits START GAME.
+
+RULES
+  One player is IT (red arrow). Tag someone by touching them.
+  The first tag starts a 60-second clock.
+  Whoever is IT when the clock hits zero LOSES - everyone else survives.
+  Q uses your class ability. Move: WASD/arrows, jump: space/W/up,
+  drop through dashed platforms: hold down + jump.
+
+If joining by code fails ("connection blocked by network"), one player's
+network is blocking direct connections — use Direct Connect on the same
+LAN instead, or have a different player host.
