@@ -23,6 +23,7 @@ Pick your character:
 | **Slipper** | Light and springy | **Blink** — teleport ahead, mid-chase |
 | **Swapper** | Unpredictable | **Swap** — trade places with the nearest player |
 | **Anchor** | Heavy, mighty, vindictive | **Stun Pulse** — freeze everyone nearby |
+| **Echo** | Never where you think | **Rewind** — snap back to where you were 2 s ago |
 
 Every map is procedurally generated from a shared seed (plus two
 hand-built arenas), with drop-through platforms, drifting clouds, and a

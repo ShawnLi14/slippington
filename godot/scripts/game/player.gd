@@ -23,6 +23,9 @@ const CLAIM_INTERVAL_MS := 250
 const CLAIM_CONTACT_SIZE := GameConfig.PLAYER_SIZE * 0.85
 ## Host-side position history window for lag-compensated claim validation.
 const HISTORY_WINDOW := 0.6
+## Echo (Rewind) looks 2s into the past; keep a little extra so the lookup
+## never falls off the end of the buffer.
+const ECHO_WINDOW := 2.2
 ## Brief freeze applied to both players involved in a tag (hit-stop).
 const TAG_HITSTOP := 0.15
 
@@ -60,6 +63,11 @@ var _last_claim_ms := 0
 
 # Host-only: timestamped position history for lag-compensated tag validation.
 var _history: Array = []
+
+# Echo class only: recent (t, pos, vel) trail for the Rewind ability. The
+# authority records its exact state; puppets record the sync stream so
+# remote screens can place the telegraph marker.
+var _echo_history: Array = []
 
 var _sync_accumulator := 0.0
 var _name_label: Label
@@ -203,6 +211,9 @@ func _authority_physics(delta: float) -> void:
 	if global_position.y > GameConfig.MAP_HEIGHT + 200.0:
 		global_position.y = -half  # fell out somehow — wrap to top
 
+	if _uses_echo():
+		_record_echo(global_position, velocity)
+
 	var new_anim := "idle"
 	if not is_on_floor():
 		new_anim = "jump" if velocity.y < 0.0 else "fall"
@@ -279,6 +290,8 @@ func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: S
 	_snapshots.append({"t": sender_t, "pos": pos, "vel": vel})
 	while _snapshots.size() > 40:
 		_snapshots.pop_front()
+	if _uses_echo():
+		_record_echo(pos, vel)
 	if p_facing != facing_right or p_anim != anim_state:
 		facing_right = p_facing
 		anim_state = p_anim
@@ -400,6 +413,48 @@ func teleport_to(pos: Vector2) -> void:
 	global_position = pos
 
 
+# --- echo (Rewind ability) ------------------------------------------------------
+
+func _uses_echo() -> bool:
+	return player_class != null and player_class.primary_ability != null \
+			and player_class.primary_ability.id == "rewind"
+
+
+func _record_echo(pos: Vector2, vel: Vector2) -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	_echo_history.append({"t": t, "pos": pos, "vel": vel})
+	while not _echo_history.is_empty() and _echo_history[0]["t"] < t - ECHO_WINDOW:
+		_echo_history.pop_front()
+
+
+## This player's recorded state secs_back ago (clamped to the oldest sample,
+## so an early-match rewind just goes to the spawn-side of the trail).
+func get_echo_state(secs_back: float) -> Dictionary:
+	var cutoff := Time.get_ticks_msec() / 1000.0 - secs_back
+	for entry in _echo_history:
+		if entry["t"] >= cutoff:
+			return entry
+	if _echo_history.is_empty():
+		return {"pos": global_position, "vel": velocity}
+	return _echo_history[-1]
+
+
+## Telegraph the destination, then snap there after the delay. The tween is
+## bound to this node, so a mid-telegraph match end can't fire into freed
+## memory. Getting tagged during the telegraph stands — that's counterplay.
+func start_rewind(target_pos: Vector2, target_vel: Vector2, delay: float) -> void:
+	spawn_echo_marker(target_pos, delay)
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(_finish_rewind.bind(target_pos, target_vel))
+
+
+func _finish_rewind(target_pos: Vector2, target_vel: Vector2) -> void:
+	teleport_to(target_pos)
+	velocity = target_vel  # past momentum comes back with you
+	dash_left = 0.0
+
+
 ## Remote VFX entry point: another peer used an ability.
 func play_remote_ability(ability_id: String) -> void:
 	match ability_id:
@@ -409,6 +464,8 @@ func play_remote_ability(ability_id: String) -> void:
 			spawn_stun_burst(StunAbility.RADIUS)
 		"swap":
 			spawn_pulse_ring(50.0)
+		"rewind":
+			spawn_echo_marker(get_echo_state(RewindAbility.REWIND_SECS)["pos"], RewindAbility.TELEGRAPH_SECS)
 		"dash":
 			flash_ability_vfx(ability_id)
 
@@ -445,6 +502,16 @@ func spawn_stun_burst(radius: float) -> void:
 	burst.max_radius = radius
 	burst.ring_color = color
 	get_parent().add_child(burst)
+
+
+## Rewind telegraph: a ghost of the player at the destination with a ring
+## that shrinks down over the marker's lifetime — when it closes, they snap.
+func spawn_echo_marker(pos: Vector2, lifetime: float) -> void:
+	var marker := EchoMarker.new()
+	marker.global_position = pos
+	marker.marker_color = color
+	marker.lifetime = lifetime
+	get_parent().add_child(marker)
 
 
 func _make_ghost(at: Vector2) -> Node2D:
@@ -545,3 +612,30 @@ class StunBurst:
 		# Inner echo ring so the boundary still reads over busy backgrounds.
 		if r > 24.0:
 			draw_arc(Vector2.ZERO, r - 12.0, 0.0, TAU, 64, Color(1, 1, 1, 0.35 * _alpha), 2.0)
+
+
+## Rewind destination telegraph: ghost player square + a ring that shrinks
+## over `lifetime` (the snap lands when it closes), then a short fade.
+class EchoMarker:
+	extends Node2D
+	const FADE := 0.15
+	var marker_color := Color.WHITE
+	var lifetime := 0.3
+	var _t := 0.0
+
+	func _process(delta: float) -> void:
+		_t += delta
+		if _t >= lifetime + FADE:
+			queue_free()
+			return
+		queue_redraw()
+
+	func _draw() -> void:
+		var alpha := 0.6
+		if _t > lifetime:
+			alpha *= maxf(0.0, 1.0 - (_t - lifetime) / FADE)
+		var half := GameConfig.PLAYER_SIZE / 2.0
+		draw_rect(Rect2(-half, -half, GameConfig.PLAYER_SIZE, GameConfig.PLAYER_SIZE), Color(marker_color, alpha * 0.45))
+		draw_rect(Rect2(-half, -half, GameConfig.PLAYER_SIZE, GameConfig.PLAYER_SIZE), Color(1, 1, 1, alpha * 0.7), false, 2.0)
+		var f := clampf(_t / maxf(lifetime, 0.001), 0.0, 1.0)
+		draw_arc(Vector2.ZERO, half + 28.0 * (1.0 - f) + 4.0, 0.0, TAU, 32, Color(marker_color, alpha), 2.5)

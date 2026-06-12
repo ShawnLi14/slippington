@@ -91,6 +91,11 @@ write_wav("swap", seq(
     tone(lambda t: 440, 0.12, release=0.5, vol=0.55),
 ))
 write_wav("stun", tone(lambda t: 110 - 30 * t, 0.34, square, release=0.4, vol=0.5))
+# Rewind: tape-scrub warble falling back, then a snap up into place.
+write_wav("rewind", seq(
+    tone(lambda t: 950 - 480 * t + 40 * math.sin(t * 60), 0.16, release=0.3, vol=0.5),
+    tone(lambda t: 420 + 760 * t, 0.13, release=0.4, vol=0.55),
+))
 
 # Round flow
 write_wav("tick", tone(lambda t: 1250, 0.05, release=0.8, vol=0.5))
