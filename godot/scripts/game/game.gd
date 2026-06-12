@@ -19,6 +19,10 @@ func _ready() -> void:
 	map_data = MapGenerator.from_seed_or_preset(GameState.map_seed)
 	for platform_data in map_data["platforms"]:
 		add_child(PlatformBody.create(platform_data))
+	for obj in map_data.get("objects", []):
+		match obj["type"]:
+			"spring":
+				add_child(SpringPad.create(obj["pos"]))
 
 	_spawn_players()
 

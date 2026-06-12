@@ -157,7 +157,12 @@ func _authority_physics(delta: float) -> void:
 	elif stunned:
 		velocity.x = 0.0
 	else:
-		velocity.x = direction * GameConfig.PLAYER_SPEED * player_class.speed_mult
+		var target_vx := direction * GameConfig.PLAYER_SPEED * player_class.speed_mult
+		if _standing_on_ice():
+			# Slide: gradual accel/brake — reversing direction is a commitment.
+			velocity.x = move_toward(velocity.x, target_vx, GameConfig.ICE_ACCEL * delta)
+		else:
+			velocity.x = target_vx
 		if direction > 0.0:
 			_set_facing(true)
 		elif direction < 0.0:
@@ -334,6 +339,22 @@ func try_use_ability() -> void:
 
 func get_cooldown_remaining() -> float:
 	return maxf(0.0, float(_cooldown_until_ms - Time.get_ticks_msec()) / 1000.0)
+
+
+func _standing_on_ice() -> bool:
+	if not is_on_floor():
+		return false
+	for i in get_slide_collision_count():
+		var collider := get_slide_collision(i).get_collider()
+		if collider is PlatformBody and collider.type == "ice":
+			return true
+	return false
+
+
+## Launch from a spring pad (applied by the owning peer only).
+func apply_spring(launch_velocity: float) -> void:
+	velocity.y = launch_velocity
+	dash_left = 0.0
 
 
 func start_dash(speed: float, duration: float) -> void:

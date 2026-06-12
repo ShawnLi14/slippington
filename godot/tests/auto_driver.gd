@@ -22,6 +22,8 @@ var code_file := ""
 var bot_style := "simple"
 var bot_class := ""
 
+var map_choice := "arena"
+
 var _jump_cooldown := 0.0
 var _ability_timer := 0.0
 
@@ -51,6 +53,8 @@ func _ready() -> void:
 			NetworkManager.signaling_url = arg.trim_prefix("--signaling=")
 		elif arg.begins_with("--bot-style="):
 			bot_style = arg.trim_prefix("--bot-style=")
+		elif arg.begins_with("--map="):
+			map_choice = arg.trim_prefix("--map=")
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
 		elif arg.begins_with("--match-seconds="):
@@ -130,7 +134,7 @@ func _ready() -> void:
 		"shot-game":
 			# Solo game directly into PLAYING to capture map + HUD.
 			NetworkManager.host_lan(port)
-			GameState.host_start_game("arena")
+			GameState.host_start_game(map_choice)
 			_take_screenshot(1.5)
 			return
 		"host":
@@ -214,7 +218,7 @@ func _on_players_changed() -> void:
 			_started_game = true
 			print("[bot] starting game")
 			NetworkManager.close_signaling()
-			GameState.host_start_game("arena", 1)  # host starts "it": bots assume it
+			GameState.host_start_game(map_choice, 1)  # host starts "it": bots assume it
 
 
 func _on_phase_changed(phase: GameState.Phase) -> void:

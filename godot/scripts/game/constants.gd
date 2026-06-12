@@ -9,6 +9,8 @@ const JUMP_VELOCITY := -450.0
 const PLAYER_SPEED := 300.0
 const PLAYER_SIZE := 40.0
 
+const ICE_ACCEL := 700.0  # px/s^2 toward target speed while on ice
+
 const TAG_RANGE := 40.0
 const TAG_IMMUNITY_SEC := 1.5
 const MATCH_DURATION_SEC := 60.0

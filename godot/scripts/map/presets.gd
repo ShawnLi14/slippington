@@ -41,6 +41,11 @@ static func _arena() -> Dictionary:
 			_p(400, 420, 200), _p(1320, 420, 200),   # top shelves
 			_p(860, 320, 200),                       # crown
 		],
+		"objects": [
+			{"type": "spring", "pos": Vector2(200, 1053)},
+			{"type": "spring", "pos": Vector2(1720, 1053)},
+			{"type": "spring", "pos": Vector2(960, 713)},
+		],
 		"spawn_points": [
 			Vector2(300, 1020), Vector2(1620, 1020),
 			Vector2(960, 680), Vector2(960, 280),
@@ -55,12 +60,16 @@ static func _towers() -> Dictionary:
 		platforms.append(_p(1680, float(y), 160))    # right tower steps
 	platforms.append(_p(880, 960, 160))              # center stepping stone
 	platforms.append(_p(320, 710, 1280, "passthrough"))  # low bridge
-	platforms.append(_p(480, 510, 960, "passthrough"))   # high bridge
+	platforms.append(_p(480, 510, 960, "ice"))           # high bridge: slippery
 	return {
 		"seed": "towers",
 		"width": GameConfig.MAP_WIDTH,
 		"height": GameConfig.MAP_HEIGHT,
 		"platforms": platforms,
+		"objects": [
+			{"type": "spring", "pos": Vector2(320, 1053)},
+			{"type": "spring", "pos": Vector2(1600, 1053)},
+		],
 		"spawn_points": [
 			Vector2(160, 1020), Vector2(1760, 1020),
 			Vector2(160, 420), Vector2(1760, 420),
