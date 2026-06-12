@@ -72,6 +72,9 @@ func _ready() -> void:
 		if _tag_count >= 2:
 			_pass("tag_back")
 		print("[bot %s] tag: %d -> %d" % [mode, old_it, new_it])
+		# Visual-check mode: capture the tag presentation mid-effect.
+		if mode == "host" and code_file.ends_with(".png") and _tag_count == 2:
+			_take_screenshot(0.12)
 	)
 	GameState.match_started.connect(func(_remaining): _pass("timer_started"))
 	GameState.ability_fired.connect(func(peer_id, ability_id):

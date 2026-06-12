@@ -26,13 +26,15 @@ func _ready() -> void:
 	UiTheme.anchor_rect(_timer_label, Control.PRESET_CENTER_TOP, Rect2(-100, 16, 200, 48))
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.add_theme_font_size_override("font_size", 40)
+	_outline(_timer_label, 8)
 	root.add_child(_timer_label)
 
 	_status_label = Label.new()
 	UiTheme.anchor_rect(_status_label, Control.PRESET_CENTER_TOP, Rect2(-300, 64, 600, 24))
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status_label.add_theme_font_size_override("font_size", 16)
-	_status_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	_status_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+	_outline(_status_label, 5)
 	root.add_child(_status_label)
 
 	var ability_box := PanelContainer.new()
@@ -71,8 +73,15 @@ func _ready() -> void:
 	UiTheme.anchor_rect(_flash_label, Control.PRESET_CENTER, Rect2(-300, -120, 600, 80))
 	_flash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_flash_label.add_theme_font_size_override("font_size", 56)
+	_outline(_flash_label, 10)
 	_flash_label.modulate.a = 0.0
 	root.add_child(_flash_label)
+
+
+## Dark outline so HUD text stays readable over bright sky backgrounds.
+func _outline(label: Label, size: int) -> void:
+	label.add_theme_color_override("font_outline_color", Color(0.06, 0.06, 0.12, 0.85))
+	label.add_theme_constant_override("outline_size", size)
 
 
 func _process(_delta: float) -> void:

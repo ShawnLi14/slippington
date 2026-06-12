@@ -75,7 +75,9 @@ func _ready() -> void:
 	_name_label.size = Vector2(120, 20)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_label.add_theme_font_size_override("font_size", 13)
-	_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
+	_name_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	_name_label.add_theme_color_override("font_outline_color", Color(0.06, 0.06, 0.12, 0.85))
+	_name_label.add_theme_constant_override("outline_size", 4)
 	add_child(_name_label)
 
 	GameState.it_changed.connect(func(_n, _o): queue_redraw())
