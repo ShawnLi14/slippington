@@ -241,11 +241,13 @@ static func generate(seed_string: String) -> Dictionary:
 		})
 		low_mover_placed = true
 
-	# Moving platforms: 2-3 per map when the geometry allows. HARD ceiling
-	# at y=420 — a patrol in the top band of the screen is useless, so when
-	# low candidates don't fit we place fewer movers, never higher ones.
-	# Amplitude is clamped to the border gap up front instead of relying on
-	# the planner to strip violators afterwards.
+	# Moving platforms: 2-3 guaranteed per map, preferring the lowest viable
+	# layers (the lowest-first draw below) but allowed to fall back upward —
+	# high patrols still matter in the slush endgame. The floor just keeps
+	# them off the literal top edge. Amplitude is clamped to the border gap
+	# up front instead of relying on the planner to strip violators.
+	# (Historical note: a y>=420 hard ceiling lived here briefly — it was
+	# chasing what turned out to be the sync_to_physics origin-render bug.)
 	var mover_candidates: Array = []
 	for p in platforms:
 		var rect: Rect2 = p["rect"]
@@ -254,7 +256,7 @@ static func generate(seed_string: String) -> Dictionary:
 		# ice stay static.
 		if p["type"] != "solid" or p.has("move") or p.has("ramp") \
 				or rect.size.x < 140.0 or rect.size.x > 280.0 \
-				or rect.position.y < 420.0 or rect.position.y > LANDMARK_TOP:
+				or rect.position.y < 240.0 or rect.position.y > LANDMARK_TOP:
 			continue
 		# Connectors only — landmark pieces (e.g. the mast's crow's nest)
 		# must not wander off their structure.
