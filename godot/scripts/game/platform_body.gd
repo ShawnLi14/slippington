@@ -29,13 +29,21 @@ static func create(data: Dictionary) -> PlatformBody:
 	return p
 
 
-## Local-space triangle for a ramp: full base, incline up toward the high
-## side. (rect is the bounding box.)
+## Local-space shape for an angled platform: a normal-thickness slab tilted
+## so its top edge runs from the low corner (16px above the rect bottom) to
+## the high corner. The rect is the bounding box, thickness included.
 func _ramp_points() -> PackedVector2Array:
 	var half := rect.size / 2.0
+	var t := 16.0
 	if ramp > 0:
-		return PackedVector2Array([Vector2(-half.x, half.y), Vector2(half.x, half.y), Vector2(half.x, -half.y)])
-	return PackedVector2Array([Vector2(-half.x, -half.y), Vector2(half.x, half.y), Vector2(-half.x, half.y)])
+		return PackedVector2Array([
+			Vector2(-half.x, half.y - t), Vector2(half.x, -half.y),
+			Vector2(half.x, -half.y + t), Vector2(-half.x, half.y),
+		])
+	return PackedVector2Array([
+		Vector2(-half.x, -half.y), Vector2(half.x, half.y - t),
+		Vector2(half.x, half.y), Vector2(-half.x, -half.y + t),
+	])
 
 
 func _ready() -> void:
@@ -91,8 +99,8 @@ func _draw() -> void:
 	if ramp != 0:
 		var pts := _ramp_points()
 		draw_colored_polygon(pts, Color(fill, alpha))
-		# Highlight the walkable incline edge.
-		var lo := Vector2(-half.x, half.y) if ramp > 0 else Vector2(half.x, half.y)
+		# Highlight the walkable incline edge (top of the slab).
+		var lo := Vector2(-half.x, half.y - 16.0) if ramp > 0 else Vector2(half.x, half.y - 16.0)
 		var hi := Vector2(half.x, -half.y) if ramp > 0 else Vector2(-half.x, -half.y)
 		draw_line(lo, hi, edge, 4.0 if type == "ice" else 3.0)
 		if type == "ice":

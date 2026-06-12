@@ -115,6 +115,11 @@ static func _blockers(map: Dictionary) -> Array[Rect2]:
 	return out
 
 
+## Angled platforms are 16px-thick slabs; their bounding rect includes the
+## thickness, so the walk surface's low end sits this far above rect bottom.
+const RAMP_THICKNESS := 16.0
+
+
 ## Walkable height of a surface at horizontal position x (clamped into the
 ## surface's span). Flat platforms are their rect top; ramps ("ramp": 1
 ## rises to the right, -1 to the left) interpolate along the incline.
@@ -125,7 +130,8 @@ static func _top_y_at(s: Dictionary, x: float) -> float:
 	var f := clampf((x - r.position.x) / maxf(r.size.x, 1.0), 0.0, 1.0)
 	if s["ramp"] < 0:
 		f = 1.0 - f
-	return r.end.y - r.size.y * f
+	var low_y := r.end.y - RAMP_THICKNESS
+	return low_y - (low_y - r.position.y) * f
 
 
 ## A mover's rect expanded across its full travel range.
@@ -171,31 +177,40 @@ static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bo
 		return false
 	var ra := _sweep_rect(a)
 	var rb := _sweep_rect(b)
-	# Nearest takeoff/landing x; heights read off the actual walk surface at
-	# those points, so ramps take off from (and land on) their incline.
-	var tx := clampf(rb.get_center().x, ra.position.x, ra.position.x + ra.size.x)
-	var lx := clampf(tx, rb.position.x, rb.position.x + rb.size.x)
-	var ay := _top_y_at(a, tx)
-	var by := _top_y_at(b, lx)
-	var rise := ay - by  # > 0 means b is above a
-	if rise > jump_height():
-		return false
-	var gap := absf(lx - tx)
-	# Air time: rise to apex, then fall to b's height.
-	var t_up := JUMP_V / GRAVITY
-	var apex := jump_height() + HEIGHT_MARGIN
-	var fall_h := apex - rise
-	if fall_h < 0.0:
-		return false
-	var t := t_up + sqrt(2.0 * fall_h / GRAVITY)
-	if gap + EDGE_MARGIN > SPEED * t:
-		return false
-	var takeoff := Vector2(tx, ay - 4.0)
-	var apex_pt := Vector2((tx + lx) / 2.0, ay - apex - GameConfig.PLAYER_SIZE / 2.0)
-	var land := Vector2(lx, by - 6.0)
 	var skip := [a, b]
-	return not _segment_blocked(takeoff, apex_pt, blockers, skip) \
-		and not _segment_blocked(apex_pt, land, blockers, skip)
+	# Several candidate landings (nearest point, then each end of the
+	# target): a central pillar — like the mast spine — can block the
+	# straight arc while a side approach works fine. Heights read off the
+	# actual walk surface, so ramps take off from / land on their incline.
+	var lxs := [
+		clampf(clampf(rb.get_center().x, ra.position.x, ra.end.x), rb.position.x, rb.end.x),
+		rb.position.x + 25.0,
+		rb.end.x - 25.0,
+	]
+	for lx in lxs:
+		var tx := clampf(lx, ra.position.x, ra.end.x)
+		var ay := _top_y_at(a, tx)
+		var by := _top_y_at(b, lx)
+		var rise := ay - by  # > 0 means b is above a
+		if rise > jump_height():
+			continue
+		var gap := absf(lx - tx)
+		# Air time: rise to apex, then fall to b's height.
+		var t_up := JUMP_V / GRAVITY
+		var apex := jump_height() + HEIGHT_MARGIN
+		var fall_h := apex - rise
+		if fall_h < 0.0:
+			continue
+		var t := t_up + sqrt(2.0 * fall_h / GRAVITY)
+		if gap + EDGE_MARGIN > SPEED * t:
+			continue
+		var takeoff := Vector2(tx, ay - 4.0)
+		var apex_pt := Vector2((tx + lx) / 2.0, ay - apex - GameConfig.PLAYER_SIZE / 2.0)
+		var land := Vector2(lx, by - 6.0)
+		if not _segment_blocked(takeoff, apex_pt, blockers, skip) \
+				and not _segment_blocked(apex_pt, land, blockers, skip):
+			return true
+	return false
 
 
 static func _spring_edge_ok(pad_pos: Vector2, support: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:

@@ -31,7 +31,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "ridge"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast"]
 
 ## Widest half-extent of each landmark's platforms, used to keep the whole
 ## structure GameConfig.PLATFORM_GAP clear of the map border and of the
@@ -42,7 +42,7 @@ const LANDMARK_HALF := {
 	"pocket": 170.0,
 	"ice_rink": 190.0,     # second slab: w2/2 (150) + 40 placement jitter
 	"spring_yard": 100.0,
-	"ridge": 175.0,        # two 130 ramps + 90 crown
+	"mast": 140.0,         # crow's nest 280 wide
 }
 
 
@@ -76,7 +76,6 @@ static func generate(seed_string: String) -> Dictionary:
 	var col_w := float(width) / float(columns)
 	var gap := GameConfig.PLATFORM_GAP
 	var landmark_boxes: Array[Rect2] = []
-	var landmark_extents: Array[Vector2] = []  # x ranges, for ground mounds
 	# Greedy left-to-right: each landmark sits near its column center, pushed
 	# clear of the border and of its left neighbor by a full gap, while
 	# reserving room on the right for the columns still to come (so the
@@ -92,40 +91,12 @@ static func generate(seed_string: String) -> Dictionary:
 		var hi := float(width) - gap - half - reserve
 		var cx := clampf(col_w * (float(i) + 0.5) + rng.next_float(-40.0, 40.0), lo, hi)
 		prev_right = cx + half
-		landmark_extents.append(Vector2(cx - half, cx + half))
 		var built := _build_landmark(order[i], cx, ground_y, rng)
 		for p in built["platforms"]:
 			platforms.append(p)
 			landmark_boxes.append(p["rect"].grow_individual(gap, 30.0, gap, 30.0))
 		for o in built["objects"]:
 			objects.append(o)
-
-	# --- ground mounds: rolling terrain in the gaps between landmarks ------
-	# (midpoint-displacement spirit at our scale: the flat floor gets low
-	# hills — ramp up, crown, ramp down — wherever there's room.)
-	var intervals: Array[Vector2] = []
-	var cursor := gap
-	for ext in landmark_extents:
-		if ext.x - gap - cursor >= 340.0:
-			intervals.append(Vector2(cursor, ext.x - gap))
-		cursor = ext.y + gap
-	if float(width) - gap - cursor >= 340.0:
-		intervals.append(Vector2(cursor, float(width) - gap))
-	for iv in intervals:
-		if rng.next() > 0.65:
-			continue
-		var run := rng.next_float(90.0, 120.0)
-		var crown_w := rng.next_float(110.0, 160.0)
-		var rise := rng.next_float(50.0, 70.0)
-		var total := run * 2.0 + crown_w
-		if total > iv.y - iv.x:
-			continue
-		var mx := rng.next_float(iv.x, iv.y - total)
-		var crown_type := "ice" if rng.next() < 0.2 else "solid"
-		platforms.append({"rect": Rect2(mx, ground_y - rise, run, rise), "type": "solid", "ramp": 1})
-		# Crown is a full block down to the ground — no crawl space under it.
-		platforms.append({"rect": Rect2(mx + run, ground_y - rise, crown_w, rise), "type": crown_type})
-		platforms.append({"rect": Rect2(mx + run + crown_w, ground_y - rise, run, rise), "type": "solid", "ramp": -1})
 
 	# --- connector platforms above the landmark band -----------------------
 	var vertical_spacing := int(floor(max_jump_height() * 0.8))
@@ -173,11 +144,11 @@ static func generate(seed_string: String) -> Dictionary:
 			var thru := rng.next() < PASSTHROUGH_CHANCE
 			var platform: Dictionary
 			if rng.next() < RAMP_CHANCE:
-				# A slope instead of a flat: high end at this layer's height,
-				# low end dipping toward the layer below. Never thru.
-				var r_rise := rng.next_float(50.0, 80.0)
+				# An angled slab instead of a flat: same 16px-thick platform,
+				# tilted slightly (rect height = rise + thickness). Never thru.
+				var r_rise := rng.next_float(24.0, 56.0)
 				var r_dir := 1 if rng.next() < 0.5 else -1
-				platform = {"rect": Rect2(x, y, p_width, r_rise), "type": p_type, "ramp": r_dir}
+				platform = {"rect": Rect2(x, y, p_width, r_rise + PLATFORM_HEIGHT), "type": p_type, "ramp": r_dir}
 			else:
 				platform = {"rect": rect, "type": p_type, "thru": thru}
 			platforms.append(platform)
@@ -187,10 +158,12 @@ static func generate(seed_string: String) -> Dictionary:
 			# it stays inside the border gap and clear of everything else.
 			if not platform.has("ramp") and not thru and rng.next() < BEND_CHANCE:
 				var b_run := rng.next_float(90.0, 120.0)
-				var b_rise := rng.next_float(50.0, 70.0)
+				var b_rise := rng.next_float(30.0, 50.0)
 				var b_left := rng.next() < 0.5
-				var b_rect := Rect2(x - b_run, y - b_rise, b_run, b_rise) if b_left \
-						else Rect2(x + p_width, y - b_rise, b_run, b_rise)
+				# Slab rect includes the 16px thickness; the low corner's walk
+				# surface sits flush with the flat's top.
+				var b_rect := Rect2(x - b_run, y - b_rise, b_run, b_rise + PLATFORM_HEIGHT) if b_left \
+						else Rect2(x + p_width, y - b_rise, b_run, b_rise + PLATFORM_HEIGHT)
 				var bend_ok := b_rect.position.x >= gap and b_rect.end.x <= float(width) - gap
 				if bend_ok:
 					for lp in layer_platforms:
@@ -323,8 +296,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _ice_rink(cx, rng)
 		"spring_yard":
 			return _spring_yard(cx, ground_y, rng)
-		"ridge":
-			return _ridge(cx, ground_y, rng)
+		"mast":
+			return _mast(cx, ground_y, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -375,23 +348,23 @@ static func _ice_rink(cx: float, rng: SeededRng) -> Dictionary:
 	return {"platforms": plats, "objects": []}
 
 
-## A climbable hill: ramp up, defendable crown, ramp down. The crown sits
-## above jump height from the ground, so the ramps ARE the routes — chases
-## flow over the top instead of around a box.
-static func _ridge(cx: float, ground_y: float, rng: SeededRng) -> Dictionary:
+## A mast: one tall spine wall with rungs crossing it — two parallel
+## ladders sharing a divider. The sides connect under the spine's base and
+## over the crow's nest at the top; mid-climb the spine blocks horizontal
+## moves, so the juke is the feint: start up one side, drop through a thru
+## rung, slip under the base, climb the other.
+static func _mast(cx: float, ground_y: float, rng: SeededRng) -> Dictionary:
 	var plats: Array[Dictionary] = []
-	# run/rise stay under Godot's 45-degree floor_max_angle (<=43 degrees),
-	# or the incline reads as a wall instead of walkable floor.
-	var run := 130.0
-	var crown_w := 90.0
-	var rise := rng.next_float(100.0, 120.0)
-	var top_y := ground_y - rise
-	var crown_type := "ice" if rng.next() < 0.25 else "solid"
-	plats.append({"rect": Rect2(cx - crown_w / 2.0 - run, top_y, run, rise), "type": "solid", "ramp": 1})
-	plats.append({"rect": Rect2(cx - crown_w / 2.0, top_y, crown_w, rise), "type": crown_type})
-	plats.append({"rect": Rect2(cx + crown_w / 2.0, top_y, run, rise), "type": "solid", "ramp": -1})
-	# A perch over the summit keeps the vertical chase going.
-	plats.append({"rect": Rect2(cx - 90.0 + rng.next_float(-30.0, 30.0), top_y - 130.0, 180.0, PLATFORM_HEIGHT), "type": "solid", "thru": true})
+	var top_y := 560.0
+	# Spine stops 64px short of the ground (like pocket doorways) so the
+	# floor stays runnable and the two sides connect at the base.
+	plats.append({"rect": Rect2(cx - WALL_WIDTH / 2.0, top_y, WALL_WIDTH, ground_y - 64.0 - top_y), "type": "wall"})
+	var w := 260.0
+	for y in [960.0, 860.0, 760.0, 660.0]:
+		var thru := rng.next() < 0.4
+		plats.append({"rect": Rect2(cx - w / 2.0, y, w, PLATFORM_HEIGHT), "type": "solid", "thru": thru})
+	# Crow's nest across the spine top joins the two sides.
+	plats.append({"rect": Rect2(cx - 140.0, top_y - PLATFORM_HEIGHT, 280.0, PLATFORM_HEIGHT), "type": "solid"})
 	return {"platforms": plats, "objects": []}
 
 
