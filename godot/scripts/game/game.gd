@@ -10,11 +10,10 @@ var _hud: CanvasLayer
 
 
 func _ready() -> void:
-	# Background
-	var bg := ColorRect.new()
-	bg.color = Color("#0f0f1a")
-	bg.size = Vector2(GameConfig.MAP_WIDTH, GameConfig.MAP_HEIGHT)
-	bg.z_index = -10
+	# Themed, animated backdrop (sky + parallax silhouettes + ambient particles).
+	# Sits on its own negative CanvasLayer, so it renders behind the world.
+	var bg := GameBackground.new()
+	bg.bg_theme = BackgroundThemes.theme_for_seed(GameState.map_seed)
 	add_child(bg)
 
 	map_data = MapGenerator.from_seed_or_preset(GameState.map_seed)
@@ -83,6 +82,45 @@ func _on_ability_fired(peer_id: int, ability_id: String) -> void:
 		player.play_remote_ability(ability_id)
 
 
-func _on_it_changed(new_it: int, _old_it: int) -> void:
+func _on_it_changed(new_it: int, old_it: int) -> void:
 	if _hud != null and _hud.has_method("flash_tag"):
 		_hud.flash_tag(new_it == multiplayer.get_unique_id())
+
+	# Sell the tag on every screen: a lunge streak bridges whatever visual
+	# gap replication left between the two players (the Among Us trick),
+	# an impact ring marks the new "it", and both involved players freeze
+	# for a beat (hit-stop) on their own machines.
+	var tagger := get_player_node(old_it)
+	var tagged := get_player_node(new_it)
+	if tagger != null and tagged != null:
+		var streak := TagStreak.new()
+		streak.from_pos = tagger.global_position
+		streak.to_pos = tagged.global_position
+		add_child(streak)
+	if tagged != null:
+		tagged.spawn_pulse_ring(70.0)
+	var my_id := multiplayer.get_unique_id()
+	if my_id == new_it or my_id == old_it:
+		var me := local_player()
+		if me != null:
+			me.hitstop_left = Player.TAG_HITSTOP
+
+
+class TagStreak:
+	extends Node2D
+	var from_pos := Vector2.ZERO
+	var to_pos := Vector2.ZERO
+
+	func _ready() -> void:
+		global_position = from_pos
+		z_index = 50
+		var tween := create_tween()
+		tween.tween_property(self, "modulate:a", 0.0, 0.35)
+		tween.tween_callback(queue_free)
+
+	func _draw() -> void:
+		var delta := to_pos - from_pos
+		if delta.length() < 1.0:
+			delta = Vector2(1, 0)
+		draw_line(Vector2.ZERO, delta, Color(1.0, 0.3, 0.3, 0.9), 6.0)
+		draw_circle(delta, 12.0, Color(1.0, 0.3, 0.3, 0.9))

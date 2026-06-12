@@ -20,7 +20,8 @@ var code_file := ""
 var _elapsed := 0.0
 var _checks: Dictionary = {}
 var _started_game := false
-var _used_ability := false
+var _own_ability_done := false
+var _ability_frame := 0
 var _tag_count := 0
 var _done := false
 
@@ -77,6 +78,8 @@ func _ready() -> void:
 		_pass("ability_fired")
 		if peer_id != multiplayer.get_unique_id():
 			_pass("remote_ability")
+		else:
+			_own_ability_done = true
 		print("[bot %s] ability: %d used %s" % [mode, peer_id, ability_id])
 	)
 	GameState.match_ended.connect(func(results):
@@ -194,11 +197,15 @@ func _physics_process(delta: float) -> void:
 	if game == null:
 		return
 
-	# Fire the class ability once the match is underway.
-	if GameState.match_running and not _used_ability:
-		_used_ability = true
-		Input.action_press("ability_primary")
-	elif _used_ability:
+	# Fire the class ability once the match is underway. Retry with fresh
+	# presses until it registers — a press can land during tag hit-stop.
+	if GameState.match_running and not _own_ability_done:
+		_ability_frame += 1
+		if _ability_frame % 12 == 1:
+			Input.action_press("ability_primary")
+		else:
+			Input.action_release("ability_primary")
+	else:
 		Input.action_release("ability_primary")
 
 	# Whoever is "it" chases the other player; everyone else stands still.

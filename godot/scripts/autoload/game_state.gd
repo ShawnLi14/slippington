@@ -262,23 +262,59 @@ var match_director: Node = null
 
 
 ## Called by the local "it" player when it detects contact.
-func claim_tag_local(target_peer: int) -> void:
+func claim_tag_local(target_peer: int, my_pos: Vector2) -> void:
 	if is_host():
-		_host_handle_claim(1, target_peer)
+		_host_handle_claim(1, target_peer, my_pos)
 	else:
-		claim_tag.rpc_id(1, target_peer)
+		claim_tag.rpc_id(1, target_peer, my_pos)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func claim_tag(target_peer: int) -> void:
+func claim_tag(target_peer: int, claimant_pos: Vector2) -> void:
 	if not is_host():
 		return
-	_host_handle_claim(multiplayer.get_remote_sender_id(), target_peer)
+	_host_handle_claim(multiplayer.get_remote_sender_id(), target_peer, claimant_pos)
 
 
-func _host_handle_claim(claimant: int, target_peer: int) -> void:
+func _host_handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2) -> void:
 	if match_director != null:
-		match_director.handle_claim(claimant, target_peer)
+		match_director.handle_claim(claimant, target_peer, claimant_pos)
+
+
+# --- RTT measurement (host pings peers; used for lag-compensated claims) ------
+
+var _peer_rtt: Dictionary = {}  # peer_id -> seconds (EMA)
+var _ping_accumulator := 0.0
+
+
+func _process(delta: float) -> void:
+	if not is_host() or multiplayer.multiplayer_peer == null:
+		return
+	_ping_accumulator += delta
+	if _ping_accumulator >= 1.0:
+		_ping_accumulator = 0.0
+		for peer_id in multiplayer.get_peers():
+			ping.rpc_id(peer_id, Time.get_ticks_msec())
+
+
+@rpc("authority", "call_remote", "unreliable")
+func ping(host_ms: int) -> void:
+	pong.rpc_id(1, host_ms)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func pong(host_ms: int) -> void:
+	if not is_host():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var rtt := float(Time.get_ticks_msec() - host_ms) / 1000.0
+	var prev: float = _peer_rtt.get(sender, rtt)
+	_peer_rtt[sender] = lerpf(prev, rtt, 0.3)
+
+
+## Host-side estimate of a peer's round-trip time (0 for the host itself).
+func get_peer_rtt(peer_id: int) -> float:
+	return _peer_rtt.get(peer_id, 0.0)
 
 
 # --- abilities ---------------------------------------------------------------

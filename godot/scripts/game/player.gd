@@ -8,11 +8,18 @@ extends CharacterBody2D
 const DROP_THROUGH_TIME := 0.3
 ## Remote players render this far in the past, interpolated between real
 ## snapshots — smooth, with a fixed and known delay instead of a trailing lerp.
-const INTERP_DELAY := 0.075
+const INTERP_DELAY := 0.05
 const MAX_EXTRAPOLATION := 0.1
 ## While "it" and touching someone, re-claim at most this often; the host
 ## rejects claims during tag immunity, so contact re-tags once it expires.
 const CLAIM_INTERVAL_MS := 250
+## Tag claims need deeper contact than the sprites' 40px — grazes that look
+## like nothing on the victim's screen shouldn't count.
+const CLAIM_CONTACT_SIZE := GameConfig.PLAYER_SIZE * 0.85
+## Host-side position history window for lag-compensated claim validation.
+const HISTORY_WINDOW := 0.6
+## Brief freeze applied to both players involved in a tag (hit-stop).
+const TAG_HITSTOP := 0.15
 
 var peer_id := 1
 var player_class: PlayerClass
@@ -22,6 +29,7 @@ var display_name_text := "Player"
 var facing_right := true
 var anim_state := "idle"
 var stun_left := 0.0
+var hitstop_left := 0.0
 var dash_left := 0.0
 var _dash_speed := 0.0
 var _drop_through_left := 0.0
@@ -32,6 +40,9 @@ var _snapshots: Array = []
 var _teleport_count := 0
 var _seen_teleport_count := 0
 var _last_claim_ms := 0
+
+# Host-only: timestamped position history for lag-compensated tag validation.
+var _history: Array = []
 
 var _sync_accumulator := 0.0
 var _name_label: Label
@@ -80,6 +91,7 @@ func is_it() -> bool:
 
 func _physics_process(delta: float) -> void:
 	stun_left = maxf(0.0, stun_left - delta)
+	hitstop_left = maxf(0.0, hitstop_left - delta)
 	dash_left = maxf(0.0, dash_left - delta)
 	_drop_through_left = maxf(0.0, _drop_through_left - delta)
 	collision_mask = 1 if _drop_through_left > 0.0 else (1 | 2)
@@ -102,7 +114,7 @@ func _physics_process(delta: float) -> void:
 
 func _authority_physics(delta: float) -> void:
 	var dashing := dash_left > 0.0
-	var stunned := stun_left > 0.0
+	var stunned := stun_left > 0.0 or hitstop_left > 0.0
 
 	if not dashing and not is_on_floor():
 		velocity.y += GameConfig.GRAVITY * delta
@@ -139,6 +151,9 @@ func _authority_physics(delta: float) -> void:
 	# host validates the claim. What you see is what you tag.
 	if is_it():
 		_check_tagging()
+
+	if multiplayer.is_server():
+		_record_history(global_position)
 
 	# Hard world bounds (map edges).
 	var half := GameConfig.PLAYER_SIZE / 2.0
@@ -185,6 +200,8 @@ func _puppet_interpolate(_delta: float) -> void:
 
 @rpc("authority", "call_remote", "unreliable")
 func sync_state(pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int) -> void:
+	if multiplayer.is_server():
+		_record_history(pos)
 	if teleports != _seen_teleport_count:
 		_seen_teleport_count = teleports
 		_snapshots.clear()  # blink/teleport: snap, don't glide through the gap
@@ -211,13 +228,41 @@ func _check_tagging() -> void:
 	for other in get_tree().get_nodes_in_group("players"):
 		if other == self:
 			continue
-		# Box overlap of the two 40px sprites — matches what the player sees,
-		# unlike a center-distance check which is stingier on diagonals.
-		if absf(other.global_position.x - global_position.x) < GameConfig.PLAYER_SIZE \
-				and absf(other.global_position.y - global_position.y) < GameConfig.PLAYER_SIZE:
+		# Box overlap, slightly deeper than the sprites — matches what the
+		# player sees while ruling out grazes the victim never saw.
+		if absf(other.global_position.x - global_position.x) < CLAIM_CONTACT_SIZE \
+				and absf(other.global_position.y - global_position.y) < CLAIM_CONTACT_SIZE:
 			_last_claim_ms = now
-			GameState.claim_tag_local(other.peer_id)
+			GameState.claim_tag_local(other.peer_id, global_position)
 			return
+
+
+# --- host-side position history (lag compensation) -----------------------------
+
+func _record_history(pos: Vector2) -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	_history.append({"t": t, "pos": pos})
+	while not _history.is_empty() and _history[0]["t"] < t - HISTORY_WINDOW:
+		_history.pop_front()
+
+
+## Host-only: this player's position at a past host-clock time, interpolated
+## between recorded samples. Clamps to the oldest/newest sample.
+func position_at(t: float) -> Vector2:
+	if _history.is_empty():
+		return global_position
+	if t <= _history[0]["t"]:
+		return _history[0]["pos"]
+	for i in range(_history.size() - 1, -1, -1):
+		if _history[i]["t"] <= t:
+			if i == _history.size() - 1:
+				return _history[i]["pos"]
+			var a: Dictionary = _history[i]
+			var b: Dictionary = _history[i + 1]
+			var span: float = b["t"] - a["t"]
+			var f: float = 0.0 if span <= 0.0 else (t - a["t"]) / span
+			return a["pos"].lerp(b["pos"], f)
+	return _history[0]["pos"]
 
 
 # --- abilities ----------------------------------------------------------------
