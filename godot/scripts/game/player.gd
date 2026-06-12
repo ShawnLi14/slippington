@@ -46,6 +46,10 @@ var _dash_speed := 0.0
 var _drop_through_left := 0.0
 var _portal_cooldown_left := 0.0
 var _cooldown_until_ms := 0
+# Doppel cloak: while active the whole pawn (label and IT arrow included)
+# renders at _cloak_alpha — 0.5 on the caster's own screen, 0.0 on others'.
+var _cloak_left := 0.0
+var _cloak_alpha := 1.0
 
 # Puppet stream state. Snapshots are [{t, pos, vel}] on the SENDER timeline
 # (t = sender physics tick × PHYS_DT); _stream_offset maps sender time to
@@ -131,6 +135,9 @@ func _physics_process(delta: float) -> void:
 	_portal_cooldown_left = maxf(0.0, _portal_cooldown_left - delta)
 	_drop_through_left = maxf(0.0, _drop_through_left - delta)
 	collision_mask = 1 if _drop_through_left > 0.0 else (1 | 2)
+	if _cloak_left > 0.0:
+		_cloak_left = maxf(0.0, _cloak_left - delta)
+		modulate.a = _cloak_alpha if _cloak_left > 0.0 else 1.0
 
 	if is_multiplayer_authority():
 		_authority_physics(delta)
@@ -455,6 +462,49 @@ func _finish_rewind(target_pos: Vector2, target_vel: Vector2) -> void:
 	dash_left = 0.0
 
 
+# --- doppel (Decoy class) ---------------------------------------------------
+
+## Fade this pawn for `duration`. The caster passes 0.5 (you must still see
+## yourself to play); remote screens pass 0.0 — there, the decoy is all
+## anyone can see. Tag detection ignores visuals, so you stay taggable.
+func start_cloak(duration: float, alpha: float) -> void:
+	_cloak_left = duration
+	_cloak_alpha = alpha
+	modulate.a = alpha
+
+
+## Spawn this player's decoy from its current state. Runs on every peer (the
+## owner from exact state, others from the puppet); each screen simulates its
+## own copy. Standing still works too: the clone runs off in your facing
+## direction while you hold your ground.
+func spawn_decoy_clone(lifetime: float) -> void:
+	var clone := DecoyClone.new()
+	clone.global_position = global_position
+	clone.velocity = velocity
+	clone.clone_color = color
+	clone.clone_name = display_name_text
+	clone.caster_peer_id = peer_id
+	clone.speed = GameConfig.PLAYER_SPEED * player_class.speed_mult
+	clone.run_dir = signf(velocity.x) if absf(velocity.x) > 10.0 else (1.0 if facing_right else -1.0)
+	clone.facing_right = clone.run_dir > 0.0
+	clone.show_it_arrow = is_it()
+	clone.lifetime = lifetime
+	get_parent().add_child(clone)
+
+
+# --- ledge (Mason class) ------------------------------------------------------
+
+## Conjure the temporary platform just below this player's feet, clamped
+## inside the map. Runs on every peer — each client needs the collision body
+## locally for its own pawn to stand on.
+func spawn_conjured_ledge(lifetime: float) -> void:
+	var half_w := ConjuredPlatform.WIDTH / 2.0
+	var cx := clampf(global_position.x, half_w, GameConfig.MAP_WIDTH - half_w)
+	var cy := global_position.y + GameConfig.PLAYER_SIZE / 2.0 + ConjuredPlatform.THICKNESS / 2.0 + 4.0
+	get_parent().add_child(ConjuredPlatform.create(Vector2(cx, cy), lifetime, color))
+	spawn_pulse_ring(45.0)
+
+
 ## Remote VFX entry point: another peer used an ability.
 func play_remote_ability(ability_id: String) -> void:
 	match ability_id:
@@ -466,6 +516,11 @@ func play_remote_ability(ability_id: String) -> void:
 			spawn_pulse_ring(50.0)
 		"rewind":
 			spawn_echo_marker(get_echo_state(RewindAbility.REWIND_SECS)["pos"], RewindAbility.TELEGRAPH_SECS)
+		"doppel":
+			spawn_decoy_clone(DoppelAbility.CLONE_SECS)
+			start_cloak(DoppelAbility.CLOAK_SECS, 0.0)
+		"build":
+			spawn_conjured_ledge(BuildAbility.LEDGE_SECS)
 		"dash":
 			flash_ability_vfx(ability_id)
 

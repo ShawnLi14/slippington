@@ -43,6 +43,8 @@ func _ready() -> void:
 	GameState.stunned.connect(_on_local_stunned)
 	GameState.swapped.connect(_on_local_swapped)
 	GameState.practice_tagged.connect(_on_practice_tagged)
+	GameState.ability_fired.connect(_on_ability_fired)
+	GameState.it_changed.connect(_on_it_changed)
 
 
 func _process(_delta: float) -> void:
@@ -63,8 +65,6 @@ func _on_practice_tagged() -> void:
 		me.spawn_pulse_ring(70.0)
 	if _hud != null and _hud.has_method("flash_tag"):
 		_hud.flash_tag(true)
-	GameState.ability_fired.connect(_on_ability_fired)
-	GameState.it_changed.connect(_on_it_changed)
 
 
 func _spawn_players() -> void:

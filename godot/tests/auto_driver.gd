@@ -161,6 +161,21 @@ func _ready() -> void:
 			GameState.host_start_game(map_choice)
 			_take_screenshot(1.5)
 			return
+		"shot-ability":
+			# Solo game; jump, fire the local class ability (--class=) mid-air,
+			# then capture its VFX while it's still on screen.
+			NetworkManager.host_lan(port)
+			GameState.host_start_game(map_choice)
+			await get_tree().create_timer(1.2).timeout
+			Input.action_press("jump")
+			await get_tree().create_timer(0.05).timeout
+			Input.action_release("jump")
+			await get_tree().create_timer(0.35).timeout
+			Input.action_press("ability_primary")
+			await get_tree().create_timer(0.1).timeout
+			Input.action_release("ability_primary")
+			_take_screenshot(0.5)
+			return
 		"host":
 			NetworkManager.host_lan(port)
 		"join":

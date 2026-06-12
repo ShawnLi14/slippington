@@ -20,6 +20,8 @@ const CLASS_CARD_COLORS := {
 	"swapper": Color("#ffd93d"),
 	"anchor": Color("#a29bfe"),
 	"echo": Color("#fd79a8"),
+	"decoy": Color("#ff9f43"),
+	"mason": Color("#7bed9f"),
 }
 
 
@@ -30,7 +32,11 @@ func _ready() -> void:
 	UiTheme.menu_backdrop(self)
 
 	var center := VBoxContainer.new()
-	UiTheme.anchor_rect(center, Control.PRESET_CENTER, Rect2(-430, -400, 860, 800))
+	# Wide enough for the 6-card class row (6×220 + 5×16 = 1400); grow
+	# symmetrically so any future overflow stays centered instead of
+	# spilling off the right edge.
+	UiTheme.anchor_rect(center, Control.PRESET_CENTER, Rect2(-710, -400, 1420, 800))
+	center.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	center.add_theme_constant_override("separation", 18)
 	add_child(center)
 

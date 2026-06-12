@@ -96,6 +96,18 @@ write_wav("rewind", seq(
     tone(lambda t: 950 - 480 * t + 40 * math.sin(t * 60), 0.16, release=0.3, vol=0.5),
     tone(lambda t: 420 + 760 * t, 0.13, release=0.4, vol=0.55),
 ))
+# Doppel: airy split-in-two — a soft poof of noise under a quick upward
+# shimmer that doubles (two detuned chirps a beat apart).
+write_wav("doppel", mix(
+    tone(lambda t: 200, 0.2, noise, release=0.6, vol=0.35),
+    tone(lambda t: 700 + 500 * t, 0.14, release=0.4, vol=0.45),
+    [0.0] * int(RATE * 0.06) + tone(lambda t: 760 + 520 * t, 0.14, release=0.4, vol=0.4),
+))
+# Build (Ledge): a stone-clack thunk that settles into a low solid hum.
+write_wav("build", mix(
+    tone(lambda t: 150, 0.07, noise, release=0.8, vol=0.6),
+    tone(lambda t: 220 - 60 * t, 0.26, square, release=0.5, vol=0.4),
+))
 
 # Round flow
 write_wav("tick", tone(lambda t: 1250, 0.05, release=0.8, vol=0.5))

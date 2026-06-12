@@ -12,6 +12,8 @@ const SFX := {
 	"swap": preload("res://assets/audio/swap.wav"),
 	"stun": preload("res://assets/audio/stun.wav"),
 	"rewind": preload("res://assets/audio/rewind.wav"),
+	"doppel": preload("res://assets/audio/doppel.wav"),
+	"build": preload("res://assets/audio/build.wav"),
 	"tick": preload("res://assets/audio/tick.wav"),
 	"caught": preload("res://assets/audio/caught.wav"),
 	"survived": preload("res://assets/audio/survived.wav"),
