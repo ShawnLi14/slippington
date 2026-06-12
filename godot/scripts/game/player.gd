@@ -177,6 +177,7 @@ func _authority_physics(delta: float) -> void:
 				_drop_through_left = DROP_THROUGH_TIME
 			else:
 				velocity.y = GameConfig.JUMP_VELOCITY * player_class.jump_mult
+				SoundManager.play("jump")
 
 		if Input.is_action_just_pressed("ability_primary"):
 			try_use_ability()
@@ -364,6 +365,7 @@ func _standing_on_ice() -> bool:
 func apply_spring(launch_velocity: float) -> void:
 	velocity.y = launch_velocity
 	dash_left = 0.0
+	SoundManager.play("spring")
 
 
 ## Step through a portal (owning peer only); cooldown stops the exit
@@ -372,6 +374,7 @@ func try_portal(dest: Vector2) -> void:
 	if _portal_cooldown_left > 0.0:
 		return
 	_portal_cooldown_left = 2.0
+	SoundManager.play("portal")
 	teleport_to(dest)
 
 
