@@ -80,6 +80,7 @@ static func generate(seed_string: String) -> Dictionary:
 	var col_w := float(width) / float(columns)
 	var gap := GameConfig.PLATFORM_GAP
 	var landmark_boxes: Array[Rect2] = []
+	var landmark_extents: Array[Vector2] = []  # x ranges, for the low patrol
 	# Greedy left-to-right: each landmark sits near its column center, pushed
 	# clear of the border and of its left neighbor by a full gap, while
 	# reserving room on the right for the columns still to come (so the
@@ -95,6 +96,7 @@ static func generate(seed_string: String) -> Dictionary:
 		var hi := float(width) - gap - half - reserve
 		var cx := clampf(col_w * (float(i) + 0.5) + rng.next_float(-40.0, 40.0), lo, hi)
 		prev_right = cx + half
+		landmark_extents.append(Vector2(cx - half, cx + half))
 		var built := _build_landmark(order[i], cx, ground_y, rng)
 		for p in built["platforms"]:
 			platforms.append(p)
@@ -214,6 +216,31 @@ static func generate(seed_string: String) -> Dictionary:
 				rect.position.x + rect.size.x * rng.next_float(0.25, 0.75),
 				rect.position.y - 7.0)})
 
+	# One LOW patrol over open ground between landmarks: a mover anyone can
+	# board with a plain jump. (The connector-layer candidates below all
+	# live in the upper half — the mid-map band is crowded by landmark
+	# tops, so without this every mover ends up in the sky.)
+	var low_cursor := gap
+	var ground_intervals: Array[Vector2] = []
+	for ext in landmark_extents:
+		if ext.x - gap - low_cursor >= 340.0:
+			ground_intervals.append(Vector2(low_cursor, ext.x - gap))
+		low_cursor = ext.y + gap
+	if float(width) - gap - low_cursor >= 340.0:
+		ground_intervals.append(Vector2(low_cursor, float(width) - gap))
+	var low_mover_placed := false
+	if not ground_intervals.is_empty():
+		var iv: Vector2 = ground_intervals[rng.next_int(0, ground_intervals.size() - 1)]
+		var w_low := 180.0
+		var low_amp := minf(160.0, (iv.y - iv.x - w_low) / 2.0)
+		var low_cx := (iv.x + iv.y) / 2.0
+		platforms.append({
+			"rect": Rect2(low_cx - w_low / 2.0, rng.next_float(940.0, 985.0), w_low, PLATFORM_HEIGHT),
+			"type": "solid",
+			"move": {"axis": "x", "amplitude": low_amp, "period": rng.next_float(6.0, 9.0), "phase": rng.next_float(0.0, 1.0)},
+		})
+		low_mover_placed = true
+
 	# Moving platforms: 2-3 guaranteed per map (when candidates exist).
 	# Band-limited so a patrol never hugs the top edge of the map, and the
 	# amplitude is clamped to the border gap up front instead of relying on
@@ -234,14 +261,17 @@ static func generate(seed_string: String) -> Dictionary:
 				break
 		if not in_landmark:
 			mover_candidates.append(p)
+	# Strictly lowest-first: a patrol high in the sky is hard to use; one
+	# near the mid-map routes real chases. Higher candidates only come up
+	# when lower ones are discarded.
+	mover_candidates.sort_custom(func(a, b): return a["rect"].position.y > b["rect"].position.y)
 	# Keep drawing until the target is met — a candidate too hemmed in to
-	# patrol (clamped amplitude under 60) is discarded, not counted.
-	var mover_target := rng.next_int(2, 3)
+	# patrol (clamped amplitude under 60) or one whose sweep would break a
+	# route is discarded, not counted.
+	var mover_target := rng.next_int(2, 3) - (1 if low_mover_placed else 0)
 	var movers_assigned := 0
 	while movers_assigned < mover_target and not mover_candidates.is_empty():
-		var pick := rng.next_int(0, mover_candidates.size() - 1)
-		var p: Dictionary = mover_candidates[pick]
-		mover_candidates.remove_at(pick)
+		var p: Dictionary = mover_candidates.pop_front()
 		var rect: Rect2 = p["rect"]
 		var max_amp := minf(rect.position.x - GameConfig.PLATFORM_GAP,
 			float(width) - GameConfig.PLATFORM_GAP - rect.end.x)

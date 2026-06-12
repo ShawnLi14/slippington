@@ -181,8 +181,12 @@ static func _segment_hits_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
 static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
 	if a == b:
 		return false
-	var ra := _sweep_rect(a)
-	var rb := _sweep_rect(b)
+	# Takeoff/landing geometry uses the BASE rect: a mover sits at its sweep
+	# extremes only for an instant, so an arc that needs the platform at the
+	# far end of its patrol is not honest reachability. (Blockers still use
+	# the full sweep — the patrol genuinely occupies that band.)
+	var ra: Rect2 = a["rect"]
+	var rb: Rect2 = b["rect"]
 	var skip := [a, b]
 	# Several candidate landings (nearest point, then each end of the
 	# target): a central pillar — like the mast spine — can block the
@@ -220,7 +224,7 @@ static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bo
 
 
 static func _spring_edge_ok(pad_pos: Vector2, support: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
-	var rb := _sweep_rect(b)
+	var rb: Rect2 = b["rect"]  # base rect — same honesty rule as _edge_ok
 	var rise := pad_pos.y - rb.position.y
 	if rise > spring_height() or b == support:
 		return false
