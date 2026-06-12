@@ -33,6 +33,7 @@ func _ready() -> void:
 
 	GameState.player_left_game.connect(_on_player_left)
 	GameState.stunned.connect(_on_local_stunned)
+	GameState.swapped.connect(_on_local_swapped)
 	GameState.ability_fired.connect(_on_ability_fired)
 	GameState.it_changed.connect(_on_it_changed)
 
@@ -71,6 +72,12 @@ func _on_local_stunned(duration: float) -> void:
 	var me := local_player()
 	if me != null:
 		me.apply_stun(duration)
+
+
+func _on_local_swapped(pos: Vector2) -> void:
+	var me := local_player()
+	if me != null:
+		me.teleport_to(pos)
 
 
 func _on_ability_fired(peer_id: int, ability_id: String) -> void:

@@ -29,8 +29,8 @@ static func _ensure_loaded() -> void:
 		1.3, 1.1, 0.8, BlinkAbility.new()
 	)
 	_classes["bolt"] = PlayerClass.new(
-		"bolt", "Bolt", "Fast and direct. Closes gaps in a flash.",
-		1.15, 1.0, 1.0, DashAbility.new()
+		"bolt", "Bolt", "Unpredictable. Trades places in a blink.",
+		1.15, 1.0, 1.0, SwapAbility.new()
 	)
 	_classes["anchor"] = PlayerClass.new(
 		"anchor", "Anchor", "Slow but mighty. Stops runners cold.",

@@ -15,6 +15,7 @@ signal match_started(remaining: float)
 signal match_timer_updated(remaining: float)
 signal match_ended(results: Array)
 signal stunned(duration: float)
+signal swapped(pos: Vector2)
 signal ability_fired(peer_id: int, ability_id: String)
 signal player_left_game(peer_id: int)
 signal status_message(text: String)
@@ -364,3 +365,13 @@ func ability_executed(peer_id: int, ability_id: String) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func apply_stun(duration: float) -> void:
 	stunned.emit(duration)
+
+
+## Swap helper: tell a peer to teleport (its half of a position swap).
+func send_swap(target_peer: int, pos: Vector2) -> void:
+	apply_swap.rpc_id(target_peer, pos)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func apply_swap(pos: Vector2) -> void:
+	swapped.emit(pos)

@@ -347,6 +347,13 @@ func apply_stun(duration: float) -> void:
 	queue_redraw()
 
 
+## Authority-side instant relocation (Swap). Marks the move as a teleport
+## so puppets snap instead of gliding across the map.
+func teleport_to(pos: Vector2) -> void:
+	spawn_blink_trail(global_position, pos)
+	global_position = pos
+
+
 ## Remote VFX entry point: another peer used an ability.
 func play_remote_ability(ability_id: String) -> void:
 	match ability_id:
@@ -354,6 +361,8 @@ func play_remote_ability(ability_id: String) -> void:
 			flash_ability_vfx(ability_id)
 		"stun":
 			spawn_pulse_ring(StunAbility.RADIUS)
+		"swap":
+			spawn_pulse_ring(50.0)
 		"dash":
 			flash_ability_vfx(ability_id)
 
