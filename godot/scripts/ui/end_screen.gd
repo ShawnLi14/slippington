@@ -14,11 +14,16 @@ func _ready() -> void:
 	center.add_theme_constant_override("separation", 16)
 	add_child(center)
 
+	# Survivor rules: whoever is "it" when time runs out loses; everyone
+	# else wins.
 	var my_id := multiplayer.get_unique_id()
-	var i_won: bool = not GameState.results.is_empty() and GameState.results[0]["peer_id"] == my_id
-	var title := UiTheme.title("YOU WIN!" if i_won else "TIME!", 48)
-	if not i_won:
-		title.add_theme_color_override("font_color", Color.WHITE)
+	var i_lost := false
+	for r in GameState.results:
+		if r["peer_id"] == my_id:
+			i_lost = r["was_it_at_end"]
+	var title := UiTheme.title("CAUGHT!" if i_lost else "YOU SURVIVED!", 48)
+	if i_lost:
+		title.add_theme_color_override("font_color", UiTheme.RED)
 	center.add_child(title)
 
 	var panel := UiTheme.panel()
@@ -28,11 +33,9 @@ func _ready() -> void:
 	panel.add_child(list)
 	center.add_child(panel)
 
-	for i in GameState.results.size():
-		var r: Dictionary = GameState.results[i]
+	for r in GameState.results:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
-		row.add_child(UiTheme.label("#%d" % (i + 1), 20, UiTheme.TEAL if i == 0 else Color(1, 1, 1, 0.5)))
 		var swatch := ColorRect.new()
 		swatch.color = GameConfig.PLAYER_COLORS[r["color_index"]]
 		swatch.custom_minimum_size = Vector2(22, 22)
@@ -46,7 +49,9 @@ func _ready() -> void:
 		row.add_child(spacer)
 		row.add_child(UiTheme.label("%.1fs as IT" % r["time_as_it"], 18, Color(1, 1, 1, 0.6)))
 		if r["was_it_at_end"]:
-			row.add_child(UiTheme.label("CAUGHT AT THE BUZZER", 14, UiTheme.RED))
+			row.add_child(UiTheme.label("CAUGHT", 16, UiTheme.RED))
+		else:
+			row.add_child(UiTheme.label("SAFE", 16, UiTheme.TEAL))
 		list.add_child(row)
 
 	var bottom := HBoxContainer.new()

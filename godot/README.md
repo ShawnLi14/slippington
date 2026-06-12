@@ -46,8 +46,8 @@ or play on the same LAN.
   exactly when the chaser sees them; the host validates each claim
   (right claimant, immunity, plausible distance).
 - **Host-authoritative rules**: the hosting player's machine referees tags,
-  the 60s match timer, scoring (least time as "it" wins) and validates
-  ability cooldowns.
+  the 60s match timer, the survivor scoring (whoever is "it" at zero loses,
+  everyone else wins) and validates ability cooldowns.
 - **Transports**: `WebRTCMultiplayerPeer` (star topology, host = peer 1) for
   online play; `ENetMultiplayerPeer` for LAN/direct IP. All game code is
   transport-agnostic Godot high-level multiplayer (RPCs).

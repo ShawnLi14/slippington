@@ -117,7 +117,8 @@ func _end_match() -> void:
 			"was_it_at_end": id == GameState.it_peer,
 			"color_index": p["color_index"],
 		})
-	# Least time as "it" wins; whoever held the tag at zero sorts last on ties.
+	# Whoever holds the tag at zero LOSES; everyone else survives (wins).
+	# Survivors are listed by least time spent as "it" — informational only.
 	ranked.sort_custom(func(a, b):
 		if a["was_it_at_end"] != b["was_it_at_end"]:
 			return b["was_it_at_end"]

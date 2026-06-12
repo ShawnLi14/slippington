@@ -5,7 +5,8 @@ Multiplayer 2D platformer tag.
 **The game now lives in [`godot/`](godot/)** — a Godot 4.4 rebuild with direct
 peer-to-peer connections (WebRTC join codes, ENet for LAN), native Mac and
 Windows builds, three classes (Slipper / Bolt / Anchor) with abilities, seeded
-procedural maps, and time-as-"it" scoring. See `godot/README.md` to run it.
+procedural maps, and survivor scoring (it-at-zero loses). See `godot/README.md`
+to run it.
 
 [`signaling/`](signaling/) is the tiny WebSocket server that brokers the
 P2P handshake (join codes + SDP/ICE relay) — no gameplay traffic flows
