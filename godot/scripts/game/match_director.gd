@@ -146,7 +146,7 @@ func _end_match() -> void:
 			return a["time_as_it"] < b["time_as_it"]
 		return a["peer_id"] < b["peer_id"]
 	)
-	GameState.end_match.rpc(ranked)
+	GameState.host_complete_round(ranked)
 	_write_telemetry(ranked)
 
 

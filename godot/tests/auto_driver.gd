@@ -24,6 +24,8 @@ var bot_class := ""
 
 var map_choice := "arena"
 var shot_event := "tag"
+var rounds_arg := 1
+var _playing_entries := 0
 var _event_shot_taken := false
 
 var _jump_cooldown := 0.0
@@ -59,6 +61,9 @@ func _ready() -> void:
 			map_choice = arg.trim_prefix("--map=")
 		elif arg.begins_with("--shot-event="):
 			shot_event = arg.trim_prefix("--shot-event=")
+		elif arg.begins_with("--rounds="):
+			rounds_arg = int(arg.trim_prefix("--rounds="))
+			timeout_sec = maxf(timeout_sec, float(rounds_arg) * (timeout_sec * 0.6) + 30.0)
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
 		elif arg.begins_with("--match-seconds="):
@@ -82,6 +87,9 @@ func _ready() -> void:
 	# At least 2 tags must land: the first comes from the host bot, the
 	# tag-back from the client bot — proving remote tag claims register.
 	_checks["tag_back"] = false
+	if rounds_arg > 1:
+		_checks["round2_started"] = false
+		_checks["series_ended"] = false
 
 	GameState.local_name = "HostBot" if is_host else "JoinBot"
 	GameState.local_class_id = "swapper" if is_host else "anchor"
@@ -229,7 +237,7 @@ func _on_players_changed() -> void:
 			_started_game = true
 			print("[bot] starting game")
 			NetworkManager.close_signaling()
-			GameState.host_start_game(map_choice, 1)  # host starts "it": bots assume it
+			GameState.host_start_game(map_choice, 1, rounds_arg)  # host starts "it"
 
 
 func _on_phase_changed(phase: GameState.Phase) -> void:
@@ -237,6 +245,11 @@ func _on_phase_changed(phase: GameState.Phase) -> void:
 		GameState.submit_ready(true)
 	elif phase == GameState.Phase.PLAYING:
 		_pass("playing_phase")
+		_playing_entries += 1
+		if _playing_entries >= 2:
+			_pass("round2_started")
+	elif phase == GameState.Phase.ENDED and GameState.series_final:
+		_pass("series_ended")
 
 
 func _physics_process(delta: float) -> void:
@@ -249,8 +262,9 @@ func _physics_process(delta: float) -> void:
 
 	if GameState.phase != GameState.Phase.PLAYING:
 		_release_all()
-		# After the match ends, every check should be in — wrap up.
-		if GameState.phase == GameState.Phase.ENDED and _checks["match_ended"]:
+		# After the match (or series) ends, every check should be in.
+		if GameState.phase == GameState.Phase.ENDED and _checks["match_ended"] \
+				and (rounds_arg == 1 or GameState.series_final):
 			_finish()
 		return
 	var game := get_tree().root.get_node_or_null("Main/Screen") as Game

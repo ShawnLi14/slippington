@@ -15,16 +15,35 @@ func _ready() -> void:
 	add_child(center)
 
 	# Survivor rules: whoever is "it" when time runs out loses; everyone
-	# else wins.
+	# else wins. In a series, survivors bank a point a round.
 	var my_id := multiplayer.get_unique_id()
 	var i_lost := false
 	for r in GameState.results:
 		if r["peer_id"] == my_id:
 			i_lost = r["was_it_at_end"]
-	var title := UiTheme.title("CAUGHT!" if i_lost else "YOU SURVIVED!", 48)
-	if i_lost:
-		title.add_theme_color_override("font_color", UiTheme.RED)
-	center.add_child(title)
+	var is_series: bool = GameState.rounds_total > 1
+	if is_series and GameState.series_final:
+		var champ_name := "?"
+		for r in GameState.results:
+			if r["peer_id"] == GameState.series_champion:
+				champ_name = r["name"]
+		var i_won := GameState.series_champion == my_id
+		var title := UiTheme.title("YOU ARE THE CHAMPION!" if i_won else "%s WINS THE SERIES!" % champ_name.to_upper(), 42)
+		if not i_won:
+			title.add_theme_color_override("font_color", Color.WHITE)
+		center.add_child(title)
+	elif is_series:
+		var round_title := UiTheme.title("ROUND %d / %d" % [GameState.round_number, GameState.rounds_total], 40)
+		round_title.add_theme_color_override("font_color", UiTheme.RED if i_lost else UiTheme.TEAL)
+		center.add_child(round_title)
+		var sub := UiTheme.label("caught! no point this round" if i_lost else "survived — +1 point", 17, Color(1, 1, 1, 0.8))
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		center.add_child(sub)
+	else:
+		var title := UiTheme.title("CAUGHT!" if i_lost else "YOU SURVIVED!", 48)
+		if i_lost:
+			title.add_theme_color_override("font_color", UiTheme.RED)
+		center.add_child(title)
 
 	var panel := UiTheme.panel()
 	var list := VBoxContainer.new()
@@ -48,6 +67,9 @@ func _ready() -> void:
 		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(spacer)
 		row.add_child(UiTheme.label("%.1fs as IT" % r["time_as_it"], 18, Color(1, 1, 1, 0.6)))
+		if GameState.rounds_total > 1:
+			var pts: int = GameState.round_points.get(r["peer_id"], 0)
+			row.add_child(UiTheme.label("%d pt%s" % [pts, "" if pts == 1 else "s"], 18, UiTheme.TEAL))
 		if r["was_it_at_end"]:
 			row.add_child(UiTheme.label("CAUGHT", 16, UiTheme.RED))
 		else:
@@ -56,7 +78,11 @@ func _ready() -> void:
 
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 12)
-	if NetworkManager.is_host:
+	if GameState.rounds_total > 1 and not GameState.series_final:
+		var next_label := UiTheme.label("next round starting...", 17, Color(1, 1, 1, 0.7))
+		next_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bottom.add_child(next_label)
+	elif NetworkManager.is_host:
 		var again := UiTheme.button("PLAY AGAIN", true)
 		again.pressed.connect(func(): GameState.host_return_to_lobby())
 		bottom.add_child(again)

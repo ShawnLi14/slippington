@@ -6,6 +6,7 @@ extends Control
 var _player_list: VBoxContainer
 var _start_btn: Button
 var _map_picker: OptionButton
+var _mode_picker: OptionButton
 var _class_picker: OptionButton
 var _ready_btn: Button
 var _is_ready := false
@@ -83,6 +84,11 @@ func _ready() -> void:
 		for choice in MAP_CHOICES:
 			_map_picker.add_item(choice[1])
 		bottom.add_child(_map_picker)
+		_mode_picker = OptionButton.new()
+		_mode_picker.custom_minimum_size = Vector2(150, 44)
+		_mode_picker.add_item("Single match")
+		_mode_picker.add_item("Best of 5")
+		bottom.add_child(_mode_picker)
 		_start_btn = UiTheme.button("START GAME", true)
 		_start_btn.pressed.connect(_on_start)
 		bottom.add_child(_start_btn)
@@ -148,7 +154,8 @@ func _on_ready_toggled() -> void:
 
 func _on_start() -> void:
 	NetworkManager.close_signaling()  # lobby's over — no more late joiners
-	GameState.host_start_game(MAP_CHOICES[_map_picker.selected][0])
+	var rounds := 5 if _mode_picker.selected == 1 else 1
+	GameState.host_start_game(MAP_CHOICES[_map_picker.selected][0], -1, rounds)
 
 
 func _on_leave() -> void:

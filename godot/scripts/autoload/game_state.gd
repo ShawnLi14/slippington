@@ -39,6 +39,14 @@ var results: Array = []
 ## evaluated locally per player anyway).
 var world_clock := 0.0
 
+# Rounds (best-of-N) state, replicated via start_game/end_match payloads.
+var rounds_total := 1            # 1 = single match
+var round_number := 1
+var round_points: Dictionary = {}   # peer_id -> survival points
+var series_final := false            # the series just ended
+var series_champion := -1
+var _host_map_choice := "random"     # host: reused for every round
+
 var _host_ability_last_use: Dictionary = {}  # peer_id -> {ability_id: msec}
 var host_ability_use_counts: Dictionary = {}  # peer_id -> int (telemetry)
 var _next_color := 0
@@ -192,11 +200,22 @@ func peer_removed(peer_id: int) -> void:
 # --- match flow: host -> all -------------------------------------------------
 
 ## Host-only entry point from the lobby Start button. The first "it" is
-## random; forced_it pins it for integration tests.
-func host_start_game(map_choice: String, forced_it := -1) -> void:
+## random; forced_it pins it for integration tests. total_rounds 1 = a
+## single match, >1 = best-of-N series (survivors score a point a round).
+func host_start_game(map_choice: String, forced_it := -1, total_rounds := 1) -> void:
 	if not is_host():
 		return
-	var seed_str := map_choice
+	_host_map_choice = map_choice
+	rounds_total = total_rounds
+	round_number = 1
+	round_points.clear()
+	for id in players:
+		round_points[id] = 0
+	_host_start_round(forced_it)
+
+
+func _host_start_round(forced_it := -1) -> void:
+	var seed_str := _host_map_choice
 	if seed_str == "random":
 		seed_str = "%d_%06d" % [Time.get_ticks_msec(), randi() % 1000000]
 	var ids: Array = players.keys()
@@ -207,17 +226,21 @@ func host_start_game(map_choice: String, forced_it := -1) -> void:
 		players[id]["ready"] = id == 1
 	_host_ability_last_use.clear()
 	host_ability_use_counts.clear()
-	start_game.rpc(seed_str, players)
+	start_game.rpc(seed_str, players, {"total": rounds_total, "number": round_number})
 
 
 @rpc("authority", "call_local", "reliable")
-func start_game(seed_str: String, roster: Dictionary) -> void:
+func start_game(seed_str: String, roster: Dictionary, series: Dictionary) -> void:
 	players = roster
 	map_seed = seed_str
 	match_running = false
 	match_remaining = GameConfig.MATCH_DURATION_SEC
 	results.clear()
 	world_clock = 0.0
+	rounds_total = series.get("total", 1)
+	round_number = series.get("number", 1)
+	series_final = false
+	series_champion = -1
 	it_peer = -1
 	for id in players:
 		if players[id]["is_it"]:
@@ -246,10 +269,55 @@ func timer_synced(remaining: float) -> void:
 	match_timer_updated.emit(remaining)
 
 
+## Host: called by MatchDirector when the clock hits zero. Applies series
+## scoring, decides whether the series is over, and schedules the next
+## round if not.
+func host_complete_round(ranked: Array) -> void:
+	if not is_host():
+		return
+	for r in ranked:
+		if not r["was_it_at_end"] and round_points.has(r["peer_id"]):
+			round_points[r["peer_id"]] += 1
+	var rounds_left := rounds_total - round_number
+	var final := rounds_left <= 0
+	if not final and round_points.size() > 1:
+		# Majority clinch: nobody can catch the leader anymore.
+		var pts := round_points.values()
+		pts.sort()
+		pts.reverse()
+		if pts[0] > pts[1] + rounds_left:
+			final = true
+	var champion := -1
+	if final:
+		var best := -1
+		for id in round_points:
+			if round_points[id] > best:
+				best = round_points[id]
+				champion = id
+	end_match.rpc(ranked, {
+		"points": round_points,
+		"number": round_number,
+		"total": rounds_total,
+		"final": final,
+		"champion": champion,
+	})
+	if not final:
+		round_number += 1
+		get_tree().create_timer(6.0).timeout.connect(func():
+			if phase == Phase.ENDED and is_host():
+				_host_start_round()
+		)
+
+
 @rpc("authority", "call_local", "reliable")
-func end_match(ranked_results: Array) -> void:
+func end_match(ranked_results: Array, series: Dictionary) -> void:
 	match_running = false
 	results = ranked_results
+	round_points = series.get("points", {})
+	round_number = series.get("number", 1)
+	rounds_total = series.get("total", 1)
+	series_final = series.get("final", true)
+	series_champion = series.get("champion", -1)
 	_set_phase(Phase.ENDED)
 	match_ended.emit(ranked_results)
 
