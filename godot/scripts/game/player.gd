@@ -56,7 +56,7 @@ func _ready() -> void:
 
 	_name_label = Label.new()
 	_name_label.text = display_name_text
-	_name_label.position = Vector2(-60, -GameConfig.PLAYER_SIZE / 2.0 - 30)
+	_name_label.position = Vector2(-60, -GameConfig.PLAYER_SIZE / 2.0 - 48)
 	_name_label.size = Vector2(120, 20)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_label.add_theme_font_size_override("font_size", 13)

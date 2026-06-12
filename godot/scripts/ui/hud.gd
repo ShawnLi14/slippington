@@ -18,31 +18,25 @@ const RED := Color("#ff6b6b")
 
 func _ready() -> void:
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
 	_timer_label = Label.new()
-	_timer_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_timer_label.position = Vector2(-100, 16)
-	_timer_label.size = Vector2(200, 48)
+	UiTheme.anchor_rect(_timer_label, Control.PRESET_CENTER_TOP, Rect2(-100, 16, 200, 48))
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.add_theme_font_size_override("font_size", 40)
 	root.add_child(_timer_label)
 
 	_status_label = Label.new()
-	_status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_status_label.position = Vector2(-300, 64)
-	_status_label.size = Vector2(600, 24)
+	UiTheme.anchor_rect(_status_label, Control.PRESET_CENTER_TOP, Rect2(-300, 64, 600, 24))
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status_label.add_theme_font_size_override("font_size", 16)
 	_status_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	root.add_child(_status_label)
 
 	var ability_box := PanelContainer.new()
-	ability_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	ability_box.position = Vector2(-220, -110)
-	ability_box.size = Vector2(196, 86)
+	UiTheme.anchor_rect(ability_box, Control.PRESET_BOTTOM_RIGHT, Rect2(-220, -110, 196, 86))
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0, 0, 0, 0.65)
 	style.border_color = TEAL
@@ -74,9 +68,7 @@ func _ready() -> void:
 	vbox.add_child(_ability_key)
 
 	_flash_label = Label.new()
-	_flash_label.set_anchors_preset(Control.PRESET_CENTER)
-	_flash_label.position = Vector2(-300, -120)
-	_flash_label.size = Vector2(600, 80)
+	UiTheme.anchor_rect(_flash_label, Control.PRESET_CENTER, Rect2(-300, -120, 600, 80))
 	_flash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_flash_label.add_theme_font_size_override("font_size", 56)
 	_flash_label.modulate.a = 0.0

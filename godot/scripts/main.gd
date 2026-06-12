@@ -1,5 +1,7 @@
-extends Node
+extends Control
 ## Root scene: swaps the active screen as GameState moves through its phases.
+## Must be a Control (sized to the window) so the UI screens' full-rect and
+## centered anchors have a real parent rect to resolve against.
 
 var _current: Node
 

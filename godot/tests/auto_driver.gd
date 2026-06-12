@@ -79,6 +79,15 @@ func _ready() -> void:
 	NetworkManager.hosted_online.connect(_on_hosted_online)
 
 	match mode:
+		"shot-menu":
+			_take_screenshot(1.0)
+			return
+		"shot-game":
+			# Solo game directly into PLAYING to capture map + HUD.
+			NetworkManager.host_lan(port)
+			GameState.host_start_game("arena")
+			_take_screenshot(1.5)
+			return
 		"host":
 			NetworkManager.host_lan(port)
 		"join":
@@ -88,6 +97,26 @@ func _ready() -> void:
 			NetworkManager.host_online()
 		"join-online":
 			_poll_code_file()
+
+
+func _take_screenshot(delay: float) -> void:
+	await get_tree().create_timer(delay).timeout
+	var main := get_tree().root.get_node("Main")
+	if main is Control:
+		print("[shot] main rect: ", main.get_global_rect(), " anchors: ", main.anchor_right, ",", main.anchor_bottom)
+	var screen: Node = null
+	for c in main.get_children():
+		if c is Control:
+			screen = c
+	if screen != null:
+		print("[shot] screen rect: ", screen.get_global_rect(), " viewport: ", get_viewport().get_visible_rect())
+		for child in screen.get_children():
+			if child is Control:
+				print("[shot]   child %s rect: %s" % [child.get_class(), child.get_global_rect()])
+	var img := get_viewport().get_texture().get_image()
+	img.save_png(code_file if code_file != "" else "user://shot.png")
+	print("[bot] screenshot saved")
+	get_tree().quit(0)
 
 
 func _on_hosted_online(code: String) -> void:

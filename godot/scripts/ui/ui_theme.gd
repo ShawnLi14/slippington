@@ -53,9 +53,20 @@ static func panel() -> PanelContainer:
 	return p
 
 
+## Anchor a control with a rect expressed relative to the anchor point.
+## (Setting .position after an anchor preset is wrong — position is always
+## parent-relative; offsets are what's anchor-relative.)
+static func anchor_rect(c: Control, preset: Control.LayoutPreset, rect: Rect2) -> void:
+	c.set_anchors_preset(preset)
+	c.offset_left = rect.position.x
+	c.offset_top = rect.position.y
+	c.offset_right = rect.position.x + rect.size.x
+	c.offset_bottom = rect.position.y + rect.size.y
+
+
 static func fullscreen_bg(parent: Control) -> void:
 	var bg := ColorRect.new()
 	bg.color = BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.z_index = -1
 	parent.add_child(bg)

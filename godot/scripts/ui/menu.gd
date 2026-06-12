@@ -15,13 +15,11 @@ var _buttons: Array[Button] = []
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	UiTheme.fullscreen_bg(self)
 
 	var center := VBoxContainer.new()
-	center.set_anchors_preset(Control.PRESET_CENTER)
-	center.position = Vector2(-380, -330)
-	center.size = Vector2(760, 660)
+	UiTheme.anchor_rect(center, Control.PRESET_CENTER, Rect2(-380, -330, 760, 660))
 	center.add_theme_constant_override("separation", 14)
 	add_child(center)
 

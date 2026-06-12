@@ -6,13 +6,11 @@ extends Control
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	UiTheme.fullscreen_bg(self)
 
 	var center := VBoxContainer.new()
-	center.set_anchors_preset(Control.PRESET_CENTER)
-	center.position = Vector2(-330, -300)
-	center.size = Vector2(660, 600)
+	UiTheme.anchor_rect(center, Control.PRESET_CENTER, Rect2(-330, -300, 660, 600))
 	center.add_theme_constant_override("separation", 16)
 	add_child(center)
 
