@@ -47,13 +47,16 @@ func _ramp_points() -> PackedVector2Array:
 
 
 func _ready() -> void:
-	# sync_to_physics MUST be configured before touching position: while it
-	# is enabled (the AnimatableBody2D default), transform writes outside
-	# _physics_process are discarded and the body snaps to the origin.
-	sync_to_physics = not move_data.is_empty()
-	set_physics_process(not move_data.is_empty())
+	# While sync_to_physics is enabled (the AnimatableBody2D default),
+	# transform writes outside _physics_process are silently DISCARDED.
+	# So: disable it, place the body (the write sticks), THEN re-enable it
+	# for movers so their per-physics-frame motion carries riders. Doing it
+	# in any other order leaves the body at the origin — top-left corner.
+	sync_to_physics = false
 	position = rect.position + rect.size / 2.0
 	_base_pos = position
+	sync_to_physics = not move_data.is_empty()
+	set_physics_process(not move_data.is_empty())
 	var shape := CollisionShape2D.new()
 	if ramp != 0:
 		var tri := ConvexPolygonShape2D.new()
