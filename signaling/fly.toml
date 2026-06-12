@@ -9,11 +9,12 @@ primary_region = "ewr"  # Newark — close to the US east coast
 [http_service]
   internal_port = 9080
   force_https = true
-  # Scale to zero when idle: costs ~nothing, and the Fly proxy auto-starts
-  # the machine on the first incoming connection (~1s cold start).
-  auto_stop_machines = "stop"
+  # Keep one machine always running: cold starts made the first player's
+  # connection stall for ~25s (TLS handshake held during machine wake).
+  # A single shared-cpu-1x 24/7 costs ~$2/mo.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
 [[vm]]
   size = "shared-cpu-1x"

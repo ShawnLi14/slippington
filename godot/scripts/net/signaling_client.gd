@@ -15,14 +15,18 @@ signal candidate_received(from_id: int, media: String, index: int, sdp: String)
 signal sig_error(reason: String)
 signal closed
 
+const CONNECT_TIMEOUT_SEC := 10.0
+
 var _ws: WebSocketPeer
 var _was_open := false
 var _pending_send: Array[String] = []
+var _connecting_for := 0.0
 
 
 func connect_to(url: String) -> Error:
 	_ws = WebSocketPeer.new()
 	_was_open = false
+	_connecting_for = 0.0
 	var err := _ws.connect_to_url(url)
 	if err != OK:
 		sig_error.emit("Could not reach signaling server")
@@ -64,11 +68,18 @@ func _send(msg: Dictionary) -> void:
 		_pending_send.append(text)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _ws == null:
 		return
 	_ws.poll()
 	var state := _ws.get_ready_state()
+	if state == WebSocketPeer.STATE_CONNECTING:
+		_connecting_for += delta
+		if _connecting_for > CONNECT_TIMEOUT_SEC:
+			_ws.close()
+			_ws = null
+			sig_error.emit("Signaling server not responding — try again")
+			return
 	if state == WebSocketPeer.STATE_OPEN:
 		if not _was_open:
 			_was_open = true
