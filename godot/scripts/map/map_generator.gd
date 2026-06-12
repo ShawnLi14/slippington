@@ -223,10 +223,10 @@ static func generate(seed_string: String) -> Dictionary:
 	var low_cursor := gap
 	var ground_intervals: Array[Vector2] = []
 	for ext in landmark_extents:
-		if ext.x - gap - low_cursor >= 340.0:
+		if ext.x - gap - low_cursor >= 280.0:
 			ground_intervals.append(Vector2(low_cursor, ext.x - gap))
 		low_cursor = ext.y + gap
-	if float(width) - gap - low_cursor >= 340.0:
+	if float(width) - gap - low_cursor >= 280.0:
 		ground_intervals.append(Vector2(low_cursor, float(width) - gap))
 	var low_mover_placed := false
 	if not ground_intervals.is_empty():
@@ -241,16 +241,20 @@ static func generate(seed_string: String) -> Dictionary:
 		})
 		low_mover_placed = true
 
-	# Moving platforms: 2-3 guaranteed per map (when candidates exist).
-	# Band-limited so a patrol never hugs the top edge of the map, and the
-	# amplitude is clamped to the border gap up front instead of relying on
+	# Moving platforms: 2-3 per map when the geometry allows. HARD ceiling
+	# at y=420 — a patrol in the top band of the screen is useless, so when
+	# low candidates don't fit we place fewer movers, never higher ones.
+	# Amplitude is clamped to the border gap up front instead of relying on
 	# the planner to strip violators afterwards.
 	var mover_candidates: Array = []
 	for p in platforms:
 		var rect: Rect2 = p["rect"]
-		if p["type"] != "solid" or p.get("thru", false) or p.has("move") or p.has("ramp") \
+		# thru platforms make fine movers (one-way patrols are a platformer
+		# classic, and their sweep doesn't block anyone's arcs); ramps and
+		# ice stay static.
+		if p["type"] != "solid" or p.has("move") or p.has("ramp") \
 				or rect.size.x < 140.0 or rect.size.x > 280.0 \
-				or rect.position.y < 200.0 or rect.position.y > LANDMARK_TOP:
+				or rect.position.y < 420.0 or rect.position.y > LANDMARK_TOP:
 			continue
 		# Connectors only — landmark pieces (e.g. the mast's crow's nest)
 		# must not wander off their structure.
@@ -287,7 +291,7 @@ static func generate(seed_string: String) -> Dictionary:
 				max_amp = minf(max_amp, rect.position.x - qr.end.x - 12.0)
 			elif qr.position.x >= rect.end.x:
 				max_amp = minf(max_amp, qr.position.x - rect.end.x - 12.0)
-		if max_amp < 60.0:
+		if max_amp < 50.0:
 			continue
 		# A patrol widens this platform's blocker footprint to its whole
 		# sweep, which can sever jump arcs that route past it. Only keep the
