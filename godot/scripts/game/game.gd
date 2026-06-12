@@ -42,6 +42,27 @@ func _ready() -> void:
 	GameState.player_left_game.connect(_on_player_left)
 	GameState.stunned.connect(_on_local_stunned)
 	GameState.swapped.connect(_on_local_swapped)
+	GameState.practice_tagged.connect(_on_practice_tagged)
+
+
+func _process(_delta: float) -> void:
+	if GameState.practice_mode and Input.is_action_just_pressed("ui_cancel"):
+		NetworkManager.leave()
+		GameState.reset_to_menu()
+
+
+func _on_practice_tagged() -> void:
+	var bot := get_player_node(GameState.PRACTICE_BOT_ID)
+	var me := local_player()
+	if bot != null and me != null:
+		var streak := TagStreak.new()
+		streak.from_pos = bot.global_position
+		streak.to_pos = me.global_position
+		add_child(streak)
+		me.hitstop_left = Player.TAG_HITSTOP
+		me.spawn_pulse_ring(70.0)
+	if _hud != null and _hud.has_method("flash_tag"):
+		_hud.flash_tag(true)
 	GameState.ability_fired.connect(_on_ability_fired)
 	GameState.it_changed.connect(_on_it_changed)
 
@@ -54,6 +75,11 @@ func _spawn_players() -> void:
 		var peer_id: int = ids[i]
 		var player := Player.new()
 		player.setup(peer_id, GameState.players[peer_id], spawn_points[i % spawn_points.size()])
+		if GameState.practice_mode and peer_id == GameState.PRACTICE_BOT_ID:
+			# The bot is simulated locally: local authority + an AI brain.
+			player.set_multiplayer_authority(1)
+			player.bot_brain = BotBrain.new()
+			player.add_child(player.bot_brain)
 		add_child(player)
 		_players[peer_id] = player
 

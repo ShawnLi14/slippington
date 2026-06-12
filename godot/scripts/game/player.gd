@@ -30,6 +30,9 @@ var peer_id := 1
 var player_class: PlayerClass
 var color := Color.WHITE
 var display_name_text := "Player"
+## When set, this node is driven by AI instead of the keyboard (practice
+## mode bot). It still runs the normal authority physics path.
+var bot_brain: BotBrain = null
 
 var facing_right := true
 var anim_state := "idle"
@@ -151,7 +154,7 @@ func _authority_physics(delta: float) -> void:
 
 	var direction := 0.0
 	if not stunned:
-		direction = Input.get_axis("move_left", "move_right")
+		direction = bot_brain.move_dir if bot_brain != null else Input.get_axis("move_left", "move_right")
 
 	if dashing:
 		velocity.x = (_dash_speed if facing_right else -_dash_speed)
@@ -172,14 +175,15 @@ func _authority_physics(delta: float) -> void:
 		elif direction < 0.0:
 			_set_facing(false)
 
-		if Input.is_action_just_pressed("jump") and is_on_floor():
-			if Input.is_action_pressed("move_down"):
+		var jump_pressed := bot_brain.poll_jump() if bot_brain != null else Input.is_action_just_pressed("jump")
+		if jump_pressed and is_on_floor():
+			if bot_brain == null and Input.is_action_pressed("move_down"):
 				_drop_through_left = DROP_THROUGH_TIME
 			else:
 				velocity.y = GameConfig.JUMP_VELOCITY * player_class.jump_mult
 				SoundManager.play("jump")
 
-		if Input.is_action_just_pressed("ability_primary"):
+		if bot_brain == null and Input.is_action_just_pressed("ability_primary"):
 			try_use_ability()
 
 	move_and_slide()
@@ -299,7 +303,7 @@ func _check_tagging() -> void:
 		if absf(other.global_position.x - global_position.x) < CLAIM_CONTACT_SIZE \
 				and absf(other.global_position.y - global_position.y) < CLAIM_CONTACT_SIZE:
 			_last_claim_ms = now
-			GameState.claim_tag_local(other.peer_id, global_position, other.get_interp_delay())
+			GameState.claim_tag_local(peer_id, other.peer_id, global_position, other.get_interp_delay())
 			return
 
 

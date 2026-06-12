@@ -98,6 +98,14 @@ func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2, interp
 	# The claimed position must roughly match the host's view of the claimant.
 	if a.global_position.distance_to(claimant_pos) > CLAIMANT_POS_TOLERANCE:
 		return
+	# Practice mode: the bot catching you is feedback, not a tag transfer —
+	# it stays IT forever and you get the usual immunity window to escape.
+	if GameState.practice_mode:
+		_immune_peer = target_peer
+		_immune_until_ms = Time.get_ticks_msec() + int(GameConfig.TAG_IMMUNITY_SEC * 1000.0)
+		GameState.practice_caught += 1
+		GameState.practice_tagged.emit()
+		return
 	# Rewind the target to the moment the claimant saw: its position packets
 	# took ~RTT/2 each way through the host relay plus the claim's own
 	# transit, i.e. one full claimant RTT, plus the claimant's actual render

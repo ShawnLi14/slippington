@@ -42,6 +42,7 @@ func _ready() -> void:
 
 	GameState.phase_changed.connect(_on_phase_changed)
 	GameState.it_changed.connect(func(_n, _o): play("tag"))
+	GameState.practice_tagged.connect(func(): play("tag"))
 	GameState.ability_fired.connect(_on_ability_fired)
 	GameState.match_timer_updated.connect(_on_timer)
 	GameState.match_ended.connect(_on_match_ended)

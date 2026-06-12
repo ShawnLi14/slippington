@@ -9,6 +9,7 @@
 - **THE SLUSH IS RISING**: the final 15 seconds flood the bottom of the map with slush that slows anyone in it to a crawl — endgames climb instead of stalling out.
 
 ## New ways to play
+- **Practice mode**: a bot chases you forever on a fresh map — learn the movement, springs and portals at your own pace. ESC to quit anytime, counter keeps score of how often it caught you.
 - **Best of 5**: survivors bank a point per round, automatic intermissions with a running scoreboard, majority-clinch detection, and a champion screen. (Single match is still the default.)
 - **Sound**: the game is no longer silent — jumps, tags, every ability, springs, portals, final-countdown ticks, win/lose stings, and an ambient loop.
 

@@ -86,7 +86,12 @@ func _outline(label: Label, size: int) -> void:
 
 
 func _process(_delta: float) -> void:
-	if GameState.match_running:
+	if GameState.practice_mode:
+		_timer_label.text = "PRACTICE"
+		_timer_label.add_theme_color_override("font_color", TEAL)
+		var n: int = GameState.practice_caught
+		_status_label.text = "caught %d time%s  ·  ESC to quit" % [n, "" if n == 1 else "s"]
+	elif GameState.match_running:
 		var remaining := int(ceil(GameState.match_remaining))
 		_timer_label.text = str(remaining)
 		_timer_label.add_theme_color_override("font_color", RED if remaining <= 10 else Color.WHITE)

@@ -47,6 +47,12 @@ var series_final := false            # the series just ended
 var series_champion := -1
 var _host_map_choice := "random"     # host: reused for every round
 
+# Practice mode: offline, a bot chases you forever, ESC exits.
+const PRACTICE_BOT_ID := 2
+signal practice_tagged
+var practice_mode := false
+var practice_caught := 0
+
 var _host_ability_last_use: Dictionary = {}  # peer_id -> {ability_id: msec}
 var host_ability_use_counts: Dictionary = {}  # peer_id -> int (telemetry)
 var _next_color := 0
@@ -89,8 +95,32 @@ func enter_lobby() -> void:
 	_set_phase(Phase.LOBBY)
 
 
+## Offline solo session against a chasing bot. No timer, no scoring, no
+## network — exit whenever with ESC.
+func start_practice() -> void:
+	practice_mode = true
+	practice_caught = 0
+	rounds_total = 1
+	round_number = 1
+	round_points.clear()
+	results.clear()
+	world_clock = 0.0
+	match_running = false
+	match_remaining = GameConfig.MATCH_DURATION_SEC
+	map_seed = "%d_%06d" % [Time.get_ticks_msec(), randi() % 1000000]
+	players = {
+		1: {"name": local_name, "class_id": local_class_id, "ready": true,
+			"color_index": 0, "is_it": false, "time_as_it": 0.0},
+		PRACTICE_BOT_ID: {"name": "Chaser", "class_id": "slipper", "ready": true,
+			"color_index": 1, "is_it": true, "time_as_it": 0.0},
+	}
+	it_peer = PRACTICE_BOT_ID
+	_set_phase(Phase.PLAYING)
+
+
 ## Local hard reset back to the menu (connection lost, left voluntarily...).
 func reset_to_menu(message := "") -> void:
+	practice_mode = false
 	players.clear()
 	results.clear()
 	it_peer = -1
@@ -349,11 +379,14 @@ func do_return_to_lobby() -> void:
 var match_director: Node = null
 
 
-## Called by the local "it" player when it detects contact. interp_delay is
-## the delay this client is rendering the TARGET at, for lag compensation.
-func claim_tag_local(target_peer: int, my_pos: Vector2, interp_delay: float) -> void:
+## Called by a locally-simulated "it" player when it detects contact —
+## normally the local player (peer id = ours), but in practice mode also
+## the bot. interp_delay is the delay this client renders the TARGET at,
+## for lag compensation. Networked claims still derive the claimant from
+## the RPC sender, so this id is only trusted host-side.
+func claim_tag_local(claimant_peer: int, target_peer: int, my_pos: Vector2, interp_delay: float) -> void:
 	if is_host():
-		_host_handle_claim(1, target_peer, my_pos, interp_delay)
+		_host_handle_claim(claimant_peer, target_peer, my_pos, interp_delay)
 	else:
 		claim_tag.rpc_id(1, target_peer, my_pos, interp_delay)
 

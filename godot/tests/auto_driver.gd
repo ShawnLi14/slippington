@@ -150,6 +150,11 @@ func _ready() -> void:
 			GameState.players_changed.emit()
 			_take_screenshot(1.0)
 			return
+		"shot-practice":
+			GameState.local_name = "You"
+			GameState.start_practice()
+			_take_screenshot(3.0)
+			return
 		"shot-game":
 			# Solo game directly into PLAYING to capture map + HUD.
 			NetworkManager.host_lan(port)

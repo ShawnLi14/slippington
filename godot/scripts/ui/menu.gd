@@ -110,6 +110,13 @@ func _ready() -> void:
 	center.add_child(join_row)
 	_buttons.append(join_btn)
 
+	var practice_btn := UiTheme.button("PRACTICE VS BOT")
+	practice_btn.custom_minimum_size = Vector2(220, 40)
+	practice_btn.add_theme_font_size_override("font_size", 15)
+	practice_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	practice_btn.pressed.connect(_on_practice)
+	center.add_child(practice_btn)
+
 	_status = UiTheme.label("", 15, UiTheme.RED)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.12, 0.9))
@@ -261,6 +268,15 @@ func _commit_identity() -> void:
 func _on_host_online() -> void:
 	_commit_identity()
 	NetworkManager.host_online()
+
+
+func _on_practice() -> void:
+	GameState.local_name = _name_edit.text.strip_edges()
+	if GameState.local_name == "":
+		GameState.local_name = "You"
+	GameState.local_class_id = _selected_class
+	NetworkManager.leave()
+	GameState.start_practice()
 
 
 func _on_join_online() -> void:
