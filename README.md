@@ -21,7 +21,7 @@ Pick your character:
 | Class | Style | Q ability |
 |---|---|---|
 | **Slipper** | Fast and slippery | **Blink** — teleport ahead, mid-chase |
-| **Bolt** | Unpredictable | **Swap** — trade places with the nearest player |
+| **Swapper** | Unpredictable | **Swap** — trade places with the nearest player |
 | **Anchor** | Slow, mighty, vindictive | **Stun Pulse** — freeze everyone nearby |
 
 Every map is procedurally generated from a shared seed (plus two

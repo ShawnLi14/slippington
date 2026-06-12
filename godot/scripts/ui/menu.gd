@@ -17,7 +17,7 @@ var _advanced_panel: PanelContainer
 
 const CLASS_CARD_COLORS := {
 	"slipper": Color("#4ecdc4"),
-	"bolt": Color("#ffd93d"),
+	"swapper": Color("#ffd93d"),
 	"anchor": Color("#a29bfe"),
 }
 

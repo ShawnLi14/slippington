@@ -9,7 +9,7 @@ static var _classes: Dictionary = {}
 static func all() -> Array[PlayerClass]:
 	_ensure_loaded()
 	var result: Array[PlayerClass] = []
-	for id in ["slipper", "bolt", "anchor"]:
+	for id in ["slipper", "swapper", "anchor"]:
 		result.append(_classes[id])
 	return result
 
@@ -28,8 +28,8 @@ static func _ensure_loaded() -> void:
 		"slipper", "Slipper", "Slippery and elusive. Hard to catch.",
 		1.3, 1.1, 0.8, BlinkAbility.new()
 	)
-	_classes["bolt"] = PlayerClass.new(
-		"bolt", "Bolt", "Unpredictable. Trades places in a blink.",
+	_classes["swapper"] = PlayerClass.new(
+		"swapper", "Swapper", "Unpredictable. Trades places in a blink.",
 		1.15, 1.0, 1.0, SwapAbility.new()
 	)
 	_classes["anchor"] = PlayerClass.new(

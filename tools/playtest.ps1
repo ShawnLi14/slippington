@@ -15,8 +15,8 @@ Remove-Item $out -ErrorAction SilentlyContinue
 
 $matchups = @(
     @("slipper", "anchor"),
-    @("bolt", "slipper"),
-    @("anchor", "bolt"),
+    @("swapper", "slipper"),
+    @("anchor", "swapper"),
     @("slipper", "slipper")
 )
 
@@ -34,8 +34,10 @@ foreach ($pair in $matchups) {
             param($g, $p, $port, $cls)
             & $g --headless --path $p -- --auto=join --port=$port --bot-style=smart --class=$cls 2>&1
         } -ArgumentList $GodotExe, $proj, $port, $pair[1]
-        Wait-Job $hostJob, $joinJob -Timeout ($MatchSeconds + 45) | Out-Null
-        $lines = (Receive-Job $hostJob) + (Receive-Job $joinJob)
+        Wait-Job $hostJob, $joinJob -Timeout ($MatchSeconds + 75) | Out-Null
+        # Force everything to strings: Receive-Job can yield objects that
+        # break -match.
+        $lines = @(Receive-Job $hostJob; Receive-Job $joinJob) | ForEach-Object { "$_" }
         Stop-Job $hostJob, $joinJob -ErrorAction SilentlyContinue
         Remove-Job $hostJob, $joinJob -Force
         Get-Process Slippington -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false

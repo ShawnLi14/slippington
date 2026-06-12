@@ -10,7 +10,7 @@
 One player clicks **CREATE GAME** and shares the 5-letter code (COPY button in the lobby). Friends enter it, **JOIN**, pick a class, ready up. Game traffic is peer-to-peer — the host's machine referees the match; no accounts or setup. LAN/direct-IP play is under the *advanced* toggle.
 
 ## What's in the box
-- **3 classes** — Slipper (**Blink**: teleport ahead), Bolt (**Swap**: trade places with the nearest player), Anchor (**Stun Pulse**: freeze everyone nearby). Q to use, switchable in the lobby.
+- **3 classes** — Slipper (**Blink**: teleport ahead), Swapper (**Swap**: trade places with the nearest player), Anchor (**Stun Pulse**: freeze everyone nearby). Q to use, switchable in the lobby.
 - **Procedural maps** from shared seeds plus two hand-built arenas (Arena, Towers), with drop-through platforms and animated themed backdrops.
 - **Survivor scoring** with a ranked end screen, instant rematch, random first IT, and a tag-back immunity window.
 - **Netcode built for fairness over home internet**: 60 Hz replication with sender-timeline snapshot interpolation and adaptive jitter buffering; tagger-side hit detection with host lag-compensated validation (250 ms rewind cap) so tags land when the chaser sees them land.

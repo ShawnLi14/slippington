@@ -11,7 +11,7 @@ extends Node
 ## exits 0/1, so two of these running together verify connect → lobby →
 ## roster sync → spawn → movement replication → tag transfer → timer start.
 
-const TIMEOUT_SEC := 40.0
+var timeout_sec := 40.0
 
 var mode := ""
 var port := 7799
@@ -53,6 +53,9 @@ func _ready() -> void:
 			bot_style = arg.trim_prefix("--bot-style=")
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
+		elif arg.begins_with("--match-seconds="):
+			# The clock only starts at the first tag — leave generous slack.
+			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
 
 	var is_host := mode.begins_with("host")
 	_checks = {
@@ -72,7 +75,7 @@ func _ready() -> void:
 	_checks["tag_back"] = false
 
 	GameState.local_name = "HostBot" if is_host else "JoinBot"
-	GameState.local_class_id = "bolt" if is_host else "anchor"
+	GameState.local_class_id = "swapper" if is_host else "anchor"
 	if bot_class != "":
 		GameState.local_class_id = bot_class
 		GameState.local_name = bot_class.capitalize() + ("H" if is_host else "J")
@@ -118,7 +121,7 @@ func _ready() -> void:
 			NetworkManager.join_code = "ABC12"
 			NetworkManager.is_host = true
 			GameState.enter_lobby()
-			GameState.players[2] = {"name": "Maya", "class_id": "bolt", "ready": true, "color_index": 1, "is_it": false, "time_as_it": 0.0}
+			GameState.players[2] = {"name": "Maya", "class_id": "swapper", "ready": true, "color_index": 1, "is_it": false, "time_as_it": 0.0}
 			GameState.players[3] = {"name": "Sam", "class_id": "anchor", "ready": false, "color_index": 2, "is_it": false, "time_as_it": 0.0}
 			GameState.players[4] = {"name": "Riko", "class_id": "slipper", "ready": true, "color_index": 3, "is_it": false, "time_as_it": 0.0}
 			GameState.players_changed.emit()
@@ -225,7 +228,7 @@ func _physics_process(delta: float) -> void:
 	if _done:
 		return
 	_elapsed += delta
-	if _elapsed > TIMEOUT_SEC:
+	if _elapsed > timeout_sec:
 		_finish()
 		return
 
