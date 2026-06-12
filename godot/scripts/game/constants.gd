@@ -11,6 +11,12 @@ const PLAYER_SIZE := 40.0
 
 const ICE_ACCEL := 700.0  # px/s^2 toward target speed while on ice
 
+## Minimum clear space between neighboring platforms — and between any
+## platform and the map border. 2.5 player-widths: enough to fall through
+## cleanly, so layouts read as islands rather than broken floors. (The
+## full-width ground is the deliberate exception.)
+const PLATFORM_GAP := 100.0
+
 # Endgame slush: rises from the map bottom over the final seconds,
 # heavily slowing anyone caught in it — forces the finish upward.
 const SLUSH_FINAL_SEC := 15.0

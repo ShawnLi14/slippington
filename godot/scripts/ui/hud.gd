@@ -47,7 +47,7 @@ func _ready() -> void:
 	var ability_box := PanelContainer.new()
 	UiTheme.anchor_rect(ability_box, Control.PRESET_BOTTOM_LEFT, Rect2(24, -136, 304, 112))
 	_ability_box_style = StyleBoxFlat.new()
-	_ability_box_style.bg_color = Color(0.06, 0.07, 0.13, 0.85)
+	_ability_box_style.bg_color = Color(0.06, 0.07, 0.13, 0.45)
 	_ability_box_style.border_color = TEAL
 	_ability_box_style.set_border_width_all(2)
 	_ability_box_style.set_corner_radius_all(12)

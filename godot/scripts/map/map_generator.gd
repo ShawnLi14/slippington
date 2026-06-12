@@ -24,6 +24,16 @@ const LANDMARK_TOP := 640.0
 
 const LANDMARKS := ["tower", "pocket", "ice_rink", "spring_yard"]
 
+## Widest half-extent of each landmark's platforms, used to keep the whole
+## structure GameConfig.PLATFORM_GAP clear of the map border and of the
+## neighboring column's landmark.
+const LANDMARK_HALF := {
+	"tower": 131.0,        # 230/2 + wall
+	"pocket": 170.0,
+	"ice_rink": 220.0,     # second slab: w2/2 (160) + 60 placement jitter
+	"spring_yard": 100.0,
+}
+
 
 static func max_jump_height() -> float:
 	var v := absf(GameConfig.JUMP_VELOCITY)
@@ -53,13 +63,27 @@ static func generate(seed_string: String) -> Dictionary:
 
 	var columns := order.size()
 	var col_w := float(width) / float(columns)
+	var gap := GameConfig.PLATFORM_GAP
 	var landmark_boxes: Array[Rect2] = []
+	# Greedy left-to-right: each landmark sits near its column center, pushed
+	# clear of the border and of its left neighbor by a full gap, while
+	# reserving room on the right for the columns still to come (so the
+	# bounds can never invert — all four widest landmarks + 5 gaps total
+	# 1742px, under the 1920 map width).
+	var prev_right := 0.0
 	for i in columns:
-		var cx := col_w * (float(i) + 0.5) + rng.next_float(-40.0, 40.0)
+		var half: float = LANDMARK_HALF[order[i]]
+		var reserve := 0.0
+		for j in range(i + 1, columns):
+			reserve += 2.0 * LANDMARK_HALF[order[j]] + gap
+		var lo := maxf(gap + half, prev_right + gap + half)
+		var hi := float(width) - gap - half - reserve
+		var cx := clampf(col_w * (float(i) + 0.5) + rng.next_float(-40.0, 40.0), lo, hi)
+		prev_right = cx + half
 		var built := _build_landmark(order[i], cx, ground_y, rng)
 		for p in built["platforms"]:
 			platforms.append(p)
-			landmark_boxes.append(p["rect"].grow(30.0))
+			landmark_boxes.append(p["rect"].grow_individual(gap, 30.0, gap, 30.0))
 		for o in built["objects"]:
 			objects.append(o)
 
@@ -81,8 +105,8 @@ static func generate(seed_string: String) -> Dictionary:
 			var base_rect: Rect2 = base["rect"]
 			var jump_time := 2.0 * absf(GameConfig.JUMP_VELOCITY) / GameConfig.GRAVITY
 			var max_horizontal := GameConfig.PLAYER_SPEED * jump_time
-			var min_x := maxf(20.0, base_rect.position.x - max_horizontal)
-			var max_x := minf(float(width) - p_width - 20.0,
+			var min_x := maxf(gap, base_rect.position.x - max_horizontal)
+			var max_x := minf(float(width) - p_width - gap,
 				base_rect.position.x + base_rect.size.x + max_horizontal - p_width)
 			if max_x < min_x:
 				continue
@@ -92,7 +116,7 @@ static func generate(seed_string: String) -> Dictionary:
 			var blocked := false
 			for lp in layer_platforms:
 				var lp_rect: Rect2 = lp["rect"]
-				if x < lp_rect.position.x + lp_rect.size.x + 50.0 and x + p_width + 50.0 > lp_rect.position.x:
+				if x < lp_rect.position.x + lp_rect.size.x + gap and x + p_width + gap > lp_rect.position.x:
 					blocked = true
 					break
 			if not blocked:
@@ -117,7 +141,7 @@ static func generate(seed_string: String) -> Dictionary:
 			var base2: Dictionary = previous_layer[0]
 			var base2_rect: Rect2 = base2["rect"]
 			var w2 := float(MIN_PLATFORM_WIDTH)
-			var x2 := maxf(20.0, minf(float(width) - w2 - 20.0,
+			var x2 := maxf(gap, minf(float(width) - w2 - gap,
 				base2_rect.position.x + base2_rect.size.x / 2.0 - w2 / 2.0))
 			var fallback := {"rect": Rect2(x2, y, w2, PLATFORM_HEIGHT), "type": "solid"}
 			platforms.append(fallback)
@@ -270,7 +294,8 @@ static func _pocket(cx: float, ground_y: float) -> Dictionary:
 ## Wide slippery platforms: cornering here is a commitment.
 static func _ice_rink(cx: float, rng: SeededRng) -> Dictionary:
 	var plats: Array[Dictionary] = []
-	var w1 := rng.next_float(320.0, 400.0)
+	# Capped at 360 so the rink + border/neighbor gaps still fit its column.
+	var w1 := rng.next_float(300.0, 360.0)
 	var w2 := rng.next_float(240.0, 320.0)
 	plats.append({"rect": Rect2(cx - w1 / 2.0, 940.0, w1, PLATFORM_HEIGHT), "type": "ice"})
 	plats.append({"rect": Rect2(cx - w2 / 2.0 + rng.next_float(-60.0, 60.0), 820.0, w2, PLATFORM_HEIGHT), "type": "ice"})

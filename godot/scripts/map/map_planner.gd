@@ -370,12 +370,15 @@ static func _try_connect(map: Dictionary, anchor: Dictionary, target: Dictionary
 	var mid := (anchor_rect.get_center() + target_rect.get_center()) / 2.0
 	for attempt in 4:
 		var w := 180.0
-		var x := clampf(mid.x - w / 2.0 + rng.next_float(-70.0, 70.0), 20.0, GameConfig.MAP_WIDTH - w - 20.0)
+		var x := clampf(mid.x - w / 2.0 + rng.next_float(-70.0, 70.0),
+			GameConfig.PLATFORM_GAP, GameConfig.MAP_WIDTH - w - GameConfig.PLATFORM_GAP)
 		var y := clampf(mid.y + rng.next_float(-40.0, 40.0), 90.0, GameConfig.MAP_HEIGHT - 120.0)
 		var rect := Rect2(x, y, w, 16.0)
 		var collides := false
 		for p in map["platforms"]:
-			if _sweep_rect(p).grow(40.0).intersects(rect):
+			# Same horizontal gap rule as generation; vertical clearance stays
+			# at 40 so repairs can still slot between layers.
+			if _sweep_rect(p).grow_individual(GameConfig.PLATFORM_GAP, 40.0, GameConfig.PLATFORM_GAP, 40.0).intersects(rect):
 				collides = true
 				break
 		if collides:
@@ -492,6 +495,10 @@ static func _point_has_clearance(map: Dictionary, pos: Vector2) -> bool:
 
 static func _mover_sweep_collides(map: Dictionary, mover: Dictionary) -> bool:
 	var sweep := _sweep_rect(mover).grow(8.0)
+	# The travel range must respect the border gap like any static platform.
+	if sweep.position.x < GameConfig.PLATFORM_GAP \
+			or sweep.end.x > GameConfig.MAP_WIDTH - GameConfig.PLATFORM_GAP:
+		return true
 	for p in map["platforms"]:
 		if p == mover:
 			continue

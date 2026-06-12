@@ -27,6 +27,7 @@ func _init() -> void:
 		for issue in issues:
 			print("FAIL seed %s: %s" % [seed_str, issue])
 			failures += 1
+		failures += _check_border_gap(seed_str, map)
 
 	for preset in ["arena", "towers"]:
 		var map := MapPresets.get_preset(preset)
@@ -41,3 +42,24 @@ func _init() -> void:
 	else:
 		print("DONE: %d seeds + presets sound" % SOUNDNESS_SEEDS)
 		quit(0)
+
+
+## Generated maps only (hand-made presets own their margins): every platform,
+## including a mover's full travel range, stays PLATFORM_GAP off the borders.
+## The full-width ground is the deliberate exception.
+func _check_border_gap(seed_str: String, map: Dictionary) -> int:
+	var bad := 0
+	for p in map["platforms"]:
+		var r: Rect2 = p["rect"]
+		if r.size.x >= float(map["width"]):
+			continue  # ground
+		var sweep := r
+		if p.has("move") and p["move"]["axis"] == "x":
+			var a: float = p["move"]["amplitude"]
+			sweep = Rect2(r.position - Vector2(a, 0), r.size + Vector2(2 * a, 0))
+		if sweep.position.x < GameConfig.PLATFORM_GAP - 0.5 \
+				or sweep.end.x > float(map["width"]) - GameConfig.PLATFORM_GAP + 0.5:
+			print("FAIL seed %s: platform breaks border gap at %.0f,%.0f (w=%.0f)"
+					% [seed_str, r.position.x, r.position.y, r.size.x])
+			bad += 1
+	return bad
