@@ -20,10 +20,16 @@ const DEFAULT_ICE_SERVERS := [
 var is_host := false
 var join_code := ""
 var signaling_url := DEFAULT_SIGNALING_URL
+## How long a WebRTC connection may sit unconnected before we call it dead.
+## A blocked network (VPN, strict NAT, UDP filtered) often leaves ICE stuck
+## "connecting" forever instead of reporting failure — without this watchdog
+## that looked like an endless spinner with no explanation.
+var connect_timeout_sec := 20.0
 
 var _signaling: SignalingClient
 var _rtc_peer: WebRTCMultiplayerPeer
 var _rtc_connections: Dictionary = {}  # peer_id -> WebRTCPeerConnection
+var _connect_deadlines: Dictionary = {}  # peer_id -> local seconds deadline
 var _ice_servers: Array = DEFAULT_ICE_SERVERS
 var _session_announced := false
 
@@ -32,6 +38,38 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+
+func _process(_delta: float) -> void:
+	# WebRTC connect watchdog (see connect_timeout_sec).
+	if _connect_deadlines.is_empty():
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	for peer_id in _connect_deadlines.keys():
+		var conn: WebRTCPeerConnection = _rtc_connections.get(peer_id)
+		if conn == null:
+			_connect_deadlines.erase(peer_id)
+			continue
+		var state := conn.get_connection_state()
+		if state == WebRTCPeerConnection.STATE_CONNECTED:
+			_connect_deadlines.erase(peer_id)
+			continue
+		var reported_dead := state == WebRTCPeerConnection.STATE_FAILED \
+				or state == WebRTCPeerConnection.STATE_CLOSED
+		if reported_dead or now > _connect_deadlines[peer_id]:
+			_connect_deadlines.erase(peer_id)
+			_on_rtc_connect_failed(peer_id, reported_dead)
+
+
+func _on_rtc_connect_failed(peer_id: int, reported_dead: bool) -> void:
+	if is_host:
+		# One joiner's network failed — drop the half-open connection but
+		# keep the room alive for everyone else in the lobby.
+		_on_sig_peer_left(peer_id)
+		return
+	var why := "Connection failed" if reported_dead else "Connection timed out"
+	session_failed.emit(why + " — a VPN or strict network is likely blocking P2P traffic. Try disabling VPNs or switching networks (both players).")
+	leave()
 
 
 # --- ENet (LAN / direct IP fallback) -----------------------------------------
@@ -145,6 +183,7 @@ func _create_rtc_connection(peer_id: int, make_offer: bool) -> void:
 	conn.session_description_created.connect(_on_rtc_description.bind(peer_id, conn))
 	conn.ice_candidate_created.connect(_on_rtc_candidate.bind(peer_id))
 	_rtc_connections[peer_id] = conn
+	_connect_deadlines[peer_id] = Time.get_ticks_msec() / 1000.0 + connect_timeout_sec
 	_rtc_peer.add_peer(conn, peer_id)
 	if make_offer:
 		conn.create_offer()
@@ -231,6 +270,7 @@ func leave() -> void:
 	for conn in _rtc_connections.values():
 		conn.close()
 	_rtc_connections.clear()
+	_connect_deadlines.clear()
 	_rtc_peer = null
 	join_code = ""
 	is_host = false

@@ -72,12 +72,21 @@ func _ready() -> void:
 			timeout_sec = maxf(timeout_sec, float(rounds_arg) * (timeout_sec * 0.6) + 30.0)
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
+		elif arg.begins_with("--connect-timeout="):
+			NetworkManager.connect_timeout_sec = float(arg.trim_prefix("--connect-timeout="))
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
 
 	var is_host := mode.begins_with("host")
-	if mode == "host-swap" or mode == "join-swap":
+	if mode == "host-deaf" or mode == "join-deaf":
+		# Watchdog test: the deaf host opens a real room on the signaling
+		# server but never answers WebRTC — like a host whose network
+		# silently eats P2P traffic. The joiner must get a clear failure
+		# message instead of an endless spinner.
+		_checks = {"room_hosted": false} if mode == "host-deaf" else {"ice_failure_surfaced": false}
+		timeout_sec = 30.0
+	elif mode == "host-swap" or mode == "join-swap":
 		# Scripted Swap correctness test: the joiner stands still, the host
 		# approaches to a meaningful separation (well past tag contact, inside
 		# the 300px Swap range), casts, and asserts a true position exchange.
@@ -115,7 +124,16 @@ func _ready() -> void:
 		GameState.local_name = bot_class.capitalize() + ("H" if is_host else "J")
 
 	NetworkManager.session_started.connect(func(): _pass("session"))
-	if mode != "join-bad-online":
+	if mode == "join-deaf":
+		NetworkManager.session_failed.connect(func(reason):
+			print("[bot join-deaf] session_failed surfaced: " + reason)
+			if "blocking P2P" in reason:
+				_pass("ice_failure_surfaced")
+				_finish()
+			else:
+				_fail("unexpected failure reason: " + reason)
+		)
+	elif mode != "join-bad-online":
 		# (join-bad-online expects its first attempt to fail.)
 		NetworkManager.session_failed.connect(func(reason): _fail("session failed: " + reason))
 	GameState.players_changed.connect(_on_players_changed)
@@ -203,6 +221,19 @@ func _ready() -> void:
 		"host-online":
 			NetworkManager.host_online()
 		"join-online":
+			_poll_code_file()
+		"host-deaf":
+			var sig := SignalingClient.new()
+			add_child(sig)
+			sig.hosted.connect(func(code, _peer_id, _ice_servers):
+				_pass("room_hosted")
+				_on_hosted_online(code)
+			)
+			sig.connect_to(NetworkManager.signaling_url)
+			sig.host_room()
+		"join-deaf":
+			if NetworkManager.connect_timeout_sec > 10.0:
+				NetworkManager.connect_timeout_sec = 8.0
 			_poll_code_file()
 		"join-bad-online":
 			# Regression: joining a nonexistent code must fail cleanly and
