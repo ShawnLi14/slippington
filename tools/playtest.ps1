@@ -1,4 +1,4 @@
-# Automated playtest batch: runs bot-vs-bot matches across class matchups
+﻿# Automated playtest batch: runs bot-vs-bot matches across class matchups
 # and collects the host's [telemetry] JSON lines into playtest_results.jsonl.
 #
 # Usage: powershell -File tools\playtest.ps1 [-Matches 2] [-MatchSeconds 30]
@@ -27,7 +27,7 @@ foreach ($pair in $matchups) {
         Write-Host "match: $($pair[0]) vs $($pair[1]) (port $port)"
         $hostJob = Start-Job -ScriptBlock {
             param($g, $p, $port, $cls, $secs)
-            & $g --headless --path $p -- --auto=host --port=$port --match-seconds=$secs --bot-style=smart --class=$cls 2>&1
+            & $g --headless --path $p -- --auto=host --port=$port --match-seconds=$secs --bot-style=smart --class=$cls --map=playtest_seed 2>&1
         } -ArgumentList $GodotExe, $proj, $port, $pair[0], $MatchSeconds
         Start-Sleep -Milliseconds 700
         $joinJob = Start-Job -ScriptBlock {
@@ -50,3 +50,4 @@ foreach ($pair in $matchups) {
 }
 Write-Host "results -> $out"
 Get-Content $out | Measure-Object -Line | Select-Object -ExpandProperty Lines
+
