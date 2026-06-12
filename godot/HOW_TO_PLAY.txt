@@ -21,7 +21,7 @@ RULES
   The first tag starts a 60-second clock.
   Whoever is IT when the clock hits zero LOSES - everyone else survives.
   J uses your class ability. Move: WASD/arrows, jump: space/W/up,
-  drop through dashed platforms: hold down + jump.
+  drop through transparent platforms: hold down + jump.
 
 If joining by code fails ("connection blocked by network"), one player's
 network is blocking direct connections — use Direct Connect on the same

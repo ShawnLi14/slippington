@@ -106,10 +106,11 @@ static func _surfaces(map: Dictionary) -> Array:
 
 
 static func _blockers(map: Dictionary) -> Array[Rect2]:
-	# Walls and solid platforms block movement arcs; passthrough does not.
+	# Anything you can't pass through blocks movement arcs; "thru" variants
+	# (one-way platforms of any material) do not.
 	var out: Array[Rect2] = []
 	for p in map["platforms"]:
-		if p["type"] == "wall" or p["type"] == "solid" or p["type"] == "ice":
+		if not p.get("thru", false):
 			out.append(_sweep_rect(p).grow(BLOCK_INFLATE))
 	return out
 
@@ -465,7 +466,7 @@ static func _delete_surface(map: Dictionary, surf: Dictionary) -> void:
 static func _spring_has_headroom(map: Dictionary, obj: Dictionary) -> bool:
 	var top := Vector2(obj["pos"].x, obj["pos"].y - 150.0)
 	for p in map["platforms"]:
-		if p["type"] == "passthrough":
+		if p.get("thru", false):
 			continue
 		if _segment_hits_rect(obj["pos"] + Vector2(0, -10), top, _sweep_rect(p)):
 			return false

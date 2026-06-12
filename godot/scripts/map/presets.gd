@@ -27,9 +27,9 @@ static func get_preset(id: String) -> Dictionary:
 	return MapPlanner.plan(map, SeededRng.new("preset_" + id))
 
 
-static func _p(x: float, y: float, w: float, type: String = "solid") -> Dictionary:
+static func _p(x: float, y: float, w: float, type: String = "solid", thru := false) -> Dictionary:
 	var h := MapGenerator.GROUND_HEIGHT if y >= 1060.0 else MapGenerator.PLATFORM_HEIGHT
-	return {"rect": Rect2(x, y, w, h), "type": type}
+	return {"rect": Rect2(x, y, w, h), "type": type, "thru": thru}
 
 
 static func _arena() -> Dictionary:
@@ -41,12 +41,12 @@ static func _arena() -> Dictionary:
 			_p(0, 1060, 1920),                       # ground
 			_p(120, 960, 360), _p(1440, 960, 360),   # lower shelves
 			_p(810, 920, 300),                       # center step
-			_p(300, 820, 280, "passthrough"), _p(1340, 820, 280, "passthrough"),
+			_p(300, 820, 280, "solid", true), _p(1340, 820, 280, "solid", true),
 			_p(760, 720, 400),                       # central stage
 			# Upper half: every rise <= ~100px with short horizontal hops —
 			# the old layout looked right but was unreachable (planner gate).
 			_p(360, 640, 240), _p(1320, 640, 240),   # upper sides
-			_p(660, 540, 600, "passthrough"),        # high bridge
+			_p(660, 540, 600, "solid", true),        # high bridge
 			_p(430, 440, 200), _p(1290, 440, 200),   # top shelves
 			_p(700, 380, 140), _p(1080, 380, 140),   # crown steps
 			_p(860, 300, 200),                       # crown
@@ -69,7 +69,7 @@ static func _towers() -> Dictionary:
 		platforms.append(_p(80, float(y), 160))      # left tower steps
 		platforms.append(_p(1680, float(y), 160))    # right tower steps
 	platforms.append(_p(880, 960, 160))              # center stepping stone
-	platforms.append(_p(320, 710, 1280, "passthrough"))  # low bridge
+	platforms.append(_p(320, 710, 1280, "solid", true))  # low bridge
 	platforms.append(_p(480, 510, 960, "ice"))           # high bridge: slippery
 	return {
 		"seed": "towers",

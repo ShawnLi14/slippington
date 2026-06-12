@@ -7,7 +7,10 @@ class_name MapGenerator
 ##
 ## Map data shape:
 ##   { "seed": String, "width": int, "height": int,
-##     "platforms": [{ "rect": Rect2, "type": "solid"|"passthrough"|"ice"|"wall" }],
+##     "platforms": [{ "rect": Rect2, "type": "solid"|"ice"|"wall",
+##                     "thru": bool }],   # thru = one-way variant of the
+##                                        # material: pass up through it,
+##                                        # land on top (drawn transparent)
 ##     "objects":   [{ "type": "spring", "pos": Vector2 }],
 ##     "spawn_points": [Vector2] }
 
@@ -127,13 +130,11 @@ static func generate(seed_string: String) -> Dictionary:
 			if blocked:
 				continue
 
-			var roll := rng.next()
-			var p_type := "solid"
-			if roll < ICE_CHANCE:
-				p_type = "ice"
-			elif roll < ICE_CHANCE + PASSTHROUGH_CHANCE:
-				p_type = "passthrough"
-			var platform := {"rect": rect, "type": p_type}
+			# Material and thru-ness roll independently: any material can
+			# come in its one-way "transparent" variant (yes, thru ice).
+			var p_type := "ice" if rng.next() < ICE_CHANCE else "solid"
+			var thru := rng.next() < PASSTHROUGH_CHANCE
+			var platform := {"rect": rect, "type": p_type, "thru": thru}
 			platforms.append(platform)
 			layer_platforms.append(platform)
 
@@ -154,7 +155,7 @@ static func generate(seed_string: String) -> Dictionary:
 	# play even outside the spring yard.
 	var spring_candidates: Array = []
 	for p in platforms:
-		if p["type"] == "solid" and p["rect"].size.x >= 200.0 and p["rect"].position.y < ground_y - 100.0:
+		if p["type"] == "solid" and not p.get("thru", false) and p["rect"].size.x >= 200.0 and p["rect"].position.y < ground_y - 100.0:
 			spring_candidates.append(p)
 	if not spring_candidates.is_empty():
 		for i in rng.next_int(1, 2):
@@ -170,7 +171,7 @@ static func generate(seed_string: String) -> Dictionary:
 		if movers >= 2:
 			break
 		var rect: Rect2 = p["rect"]
-		if p["type"] == "solid" and not p.has("move") \
+		if p["type"] == "solid" and not p.get("thru", false) and not p.has("move") \
 				and rect.size.x >= 140.0 and rect.size.x <= 220.0 \
 				and rect.position.y < LANDMARK_TOP and rng.next() < 0.35:
 			p["move"] = {
@@ -188,7 +189,7 @@ static func generate(seed_string: String) -> Dictionary:
 	for p in platforms:
 		var rect: Rect2 = p["rect"]
 		var on_far_half := rect.position.x > width * 0.55 if not flip else rect.position.x + rect.size.x < width * 0.45
-		if p["type"] == "solid" and not p.has("move") and rect.size.x >= 120.0 \
+		if p["type"] == "solid" and not p.get("thru", false) and not p.has("move") and rect.size.x >= 120.0 \
 				and rect.position.y < 500.0 and on_far_half:
 			high_candidates.append(p)
 	if not high_candidates.is_empty():
@@ -265,8 +266,8 @@ static func _scaffold(cx: float, rng: SeededRng) -> Dictionary:
 	var side := 1.0 if rng.next() < 0.5 else -1.0
 	for i in levels.size():
 		var off := side * (60.0 if i % 2 == 0 else -60.0) + rng.next_float(-15.0, 15.0)
-		var p_type := "solid" if i == levels.size() - 1 else "passthrough"
-		plats.append({"rect": Rect2(cx + off - w / 2.0, levels[i], w, PLATFORM_HEIGHT), "type": p_type})
+		var thru := i != levels.size() - 1  # all floors but the crown
+		plats.append({"rect": Rect2(cx + off - w / 2.0, levels[i], w, PLATFORM_HEIGHT), "type": "solid", "thru": thru})
 	return {"platforms": plats, "objects": []}
 
 
@@ -277,7 +278,7 @@ static func _pocket(cx: float, ground_y: float) -> Dictionary:
 	var plats: Array[Dictionary] = []
 	var roof_y := 880.0
 	plats.append({"rect": Rect2(cx - 170.0, roof_y, 110.0, PLATFORM_HEIGHT), "type": "solid"})
-	plats.append({"rect": Rect2(cx - 60.0, roof_y, 120.0, PLATFORM_HEIGHT), "type": "passthrough"})
+	plats.append({"rect": Rect2(cx - 60.0, roof_y, 120.0, PLATFORM_HEIGHT), "type": "solid", "thru": true})
 	plats.append({"rect": Rect2(cx + 60.0, roof_y, 110.0, PLATFORM_HEIGHT), "type": "solid"})
 	var wall_top := roof_y + PLATFORM_HEIGHT
 	var wall_h := ground_y - 64.0 - wall_top  # 64px entrance gaps at the floor
@@ -326,7 +327,7 @@ static func describe(map_data: Dictionary) -> String:
 		map_data["seed"], map_data["platforms"].size(), map_data.get("objects", []).size()])
 	for p in map_data["platforms"]:
 		var r: Rect2 = p["rect"]
-		var line := "%s %.0f,%.0f %dx%d" % [p["type"], r.position.x, r.position.y, int(r.size.x), int(r.size.y)]
+		var line := "%s%s %.0f,%.0f %dx%d" % [p["type"], "~thru" if p.get("thru", false) else "", r.position.x, r.position.y, int(r.size.x), int(r.size.y)]
 		if p.has("move"):
 			line += " move(%s a=%.0f T=%.1f ph=%.2f)" % [p["move"]["axis"], p["move"]["amplitude"], p["move"]["period"], p["move"]["phase"]]
 		lines.append(line)
