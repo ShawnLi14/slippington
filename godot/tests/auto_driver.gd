@@ -82,6 +82,13 @@ func _ready() -> void:
 		"shot-menu":
 			_take_screenshot(1.0)
 			return
+		"shot-lobby":
+			# Fake an online lobby (no network) to render the code panel.
+			NetworkManager.join_code = "ABC12"
+			NetworkManager.is_host = true
+			GameState.enter_lobby()
+			_take_screenshot(1.0)
+			return
 		"shot-game":
 			# Solo game directly into PLAYING to capture map + HUD.
 			NetworkManager.host_lan(port)

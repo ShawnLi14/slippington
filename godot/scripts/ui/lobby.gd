@@ -27,10 +27,27 @@ func _ready() -> void:
 		var code_panel := UiTheme.panel()
 		var code_box := VBoxContainer.new()
 		code_panel.add_child(code_box)
-		code_box.add_child(UiTheme.label("SHARE THIS CODE", 13, Color(1, 1, 1, 0.5)))
+		var share_label := UiTheme.label("SHARE THIS CODE", 13, Color(1, 1, 1, 0.5))
+		share_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		code_box.add_child(share_label)
+		var code_row := HBoxContainer.new()
+		code_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		code_row.add_theme_constant_override("separation", 16)
 		var code_label := UiTheme.label(NetworkManager.join_code, 48, UiTheme.TEAL)
-		code_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		code_box.add_child(code_label)
+		code_row.add_child(code_label)
+		var copy_btn := UiTheme.button("COPY")
+		copy_btn.custom_minimum_size = Vector2(110, 44)
+		copy_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		copy_btn.pressed.connect(func():
+			DisplayServer.clipboard_set(NetworkManager.join_code)
+			copy_btn.text = "COPIED!"
+			get_tree().create_timer(1.2).timeout.connect(func():
+				if is_instance_valid(copy_btn):
+					copy_btn.text = "COPY"
+			)
+		)
+		code_row.add_child(copy_btn)
+		code_box.add_child(code_row)
 		center.add_child(code_panel)
 
 	var list_panel := UiTheme.panel()
