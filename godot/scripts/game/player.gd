@@ -93,7 +93,15 @@ func _ready() -> void:
 	_name_label.add_theme_constant_override("outline_size", 4)
 	add_child(_name_label)
 
-	GameState.it_changed.connect(func(_n, _o): queue_redraw())
+	# Method connection (NOT a lambda): Godot auto-disconnects method
+	# callables when this node is freed. A lambda here would keep firing
+	# into freed memory after the match ends — a random crash in release
+	# builds.
+	GameState.it_changed.connect(_on_it_changed_redraw)
+
+
+func _on_it_changed_redraw(_new_it: int, _old_it: int) -> void:
+	queue_redraw()
 
 
 func is_local() -> bool:

@@ -82,7 +82,10 @@ func join_online(code: String) -> void:
 	_start_signaling()
 	_signaling.joined.connect(_on_sig_joined)
 	_signaling.join_room(code)
-	joiner_progress.emit("Looking up game %s..." % code.strip_edges().to_upper())
+	# Remember the code on the joiner side too, so the lobby can show it
+	# (everyone in the lobby can recruit more friends, not just the host).
+	join_code = code.strip_edges().to_upper()
+	joiner_progress.emit("Looking up game %s..." % join_code)
 
 
 func _webrtc_available() -> bool:

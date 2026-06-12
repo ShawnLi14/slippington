@@ -63,7 +63,9 @@ func _ready() -> void:
 	GameState.local_class_id = "bolt" if is_host else "anchor"
 
 	NetworkManager.session_started.connect(func(): _pass("session"))
-	NetworkManager.session_failed.connect(func(reason): _fail("session failed: " + reason))
+	if mode != "join-bad-online":
+		# (join-bad-online expects its first attempt to fail.)
+		NetworkManager.session_failed.connect(func(reason): _fail("session failed: " + reason))
 	GameState.players_changed.connect(_on_players_changed)
 	GameState.phase_changed.connect(_on_phase_changed)
 	GameState.it_changed.connect(func(new_it, old_it):
@@ -96,10 +98,15 @@ func _ready() -> void:
 			_take_screenshot(1.0)
 			return
 		"shot-lobby":
-			# Fake an online lobby (no network) to render the code panel.
+			# Fake a populated online lobby (no network) to render the code
+			# panel, player rows and pickers.
 			NetworkManager.join_code = "ABC12"
 			NetworkManager.is_host = true
 			GameState.enter_lobby()
+			GameState.players[2] = {"name": "Maya", "class_id": "bolt", "ready": true, "color_index": 1, "is_it": false, "time_as_it": 0.0}
+			GameState.players[3] = {"name": "Sam", "class_id": "anchor", "ready": false, "color_index": 2, "is_it": false, "time_as_it": 0.0}
+			GameState.players[4] = {"name": "Riko", "class_id": "slipper", "ready": true, "color_index": 3, "is_it": false, "time_as_it": 0.0}
+			GameState.players_changed.emit()
 			_take_screenshot(1.0)
 			return
 		"shot-game":
@@ -117,6 +124,11 @@ func _ready() -> void:
 			NetworkManager.host_online()
 		"join-online":
 			_poll_code_file()
+		"join-bad-online":
+			# Regression: joining a nonexistent code must fail cleanly and
+			# leave the client able to join a real game afterwards.
+			NetworkManager.session_failed.connect(_on_bad_join_failed)
+			NetworkManager.join_online("ZZZZ9")
 
 
 func _take_screenshot(delay: float) -> void:
@@ -147,6 +159,18 @@ func _on_hosted_online(code: String) -> void:
 		print("[bot] wrote code %s" % code)
 
 
+var _bad_join_done := false
+
+
+func _on_bad_join_failed(reason: String) -> void:
+	if _bad_join_done:
+		_fail("second join also failed: " + reason)
+		return
+	_bad_join_done = true
+	print("[bot] bad code rejected as expected (%s), joining real game" % reason)
+	_poll_code_file()
+
+
 func _poll_code_file() -> void:
 	for i in 20:
 		await get_tree().create_timer(0.5).timeout
@@ -172,7 +196,7 @@ func _on_players_changed() -> void:
 			_started_game = true
 			print("[bot] starting game")
 			NetworkManager.close_signaling()
-			GameState.host_start_game("arena")
+			GameState.host_start_game("arena", 1)  # host starts "it": bots assume it
 
 
 func _on_phase_changed(phase: GameState.Phase) -> void:

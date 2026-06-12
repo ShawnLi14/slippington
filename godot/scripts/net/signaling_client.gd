@@ -86,7 +86,10 @@ func _process(delta: float) -> void:
 			for text in _pending_send:
 				_ws.send_text(text)
 			_pending_send.clear()
-		while _ws.get_available_packet_count() > 0:
+		# A message handler can tear this client down mid-loop (an error
+		# reply makes NetworkManager close us synchronously) — re-check _ws
+		# every iteration or this dereferences null.
+		while _ws != null and _ws.get_available_packet_count() > 0:
 			_handle_message(_ws.get_packet().get_string_from_utf8())
 	elif state == WebSocketPeer.STATE_CLOSED:
 		var had_ws := _ws != null

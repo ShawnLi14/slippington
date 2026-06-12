@@ -179,15 +179,18 @@ func peer_removed(peer_id: int) -> void:
 
 # --- match flow: host -> all -------------------------------------------------
 
-## Host-only entry point from the lobby Start button.
-func host_start_game(map_choice: String) -> void:
+## Host-only entry point from the lobby Start button. The first "it" is
+## random; forced_it pins it for integration tests.
+func host_start_game(map_choice: String, forced_it := -1) -> void:
 	if not is_host():
 		return
 	var seed_str := map_choice
 	if seed_str == "random":
 		seed_str = "%d_%06d" % [Time.get_ticks_msec(), randi() % 1000000]
+	var ids: Array = players.keys()
+	var initial_it: int = forced_it if players.has(forced_it) else ids[randi() % ids.size()]
 	for id in players:
-		players[id]["is_it"] = id == 1
+		players[id]["is_it"] = id == initial_it
 		players[id]["time_as_it"] = 0.0
 		players[id]["ready"] = id == 1
 	_host_ability_last_use.clear()
@@ -201,7 +204,10 @@ func start_game(seed_str: String, roster: Dictionary) -> void:
 	match_running = false
 	match_remaining = GameConfig.MATCH_DURATION_SEC
 	results.clear()
-	it_peer = 1
+	it_peer = -1
+	for id in players:
+		if players[id]["is_it"]:
+			it_peer = id
 	_set_phase(Phase.PLAYING)
 
 

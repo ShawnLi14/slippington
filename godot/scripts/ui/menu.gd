@@ -105,9 +105,19 @@ func _ready() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center.add_child(_status)
 
+	# Method connections only — lambdas on autoload signals outlive this
+	# screen and crash release builds once it's freed.
 	NetworkManager.session_failed.connect(_on_failed)
-	NetworkManager.joiner_progress.connect(func(text): _set_status(text, Color(1, 1, 1, 0.6)))
-	GameState.status_message.connect(func(text): _set_status(text, UiTheme.RED))
+	NetworkManager.joiner_progress.connect(_on_progress)
+	GameState.status_message.connect(_on_status_message)
+
+
+func _on_progress(text: String) -> void:
+	_set_status(text, Color(1, 1, 1, 0.6))
+
+
+func _on_status_message(text: String) -> void:
+	_set_status(text, UiTheme.RED)
 
 
 func _make_class_card(player_class: PlayerClass) -> Button:

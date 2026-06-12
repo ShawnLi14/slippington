@@ -6,6 +6,7 @@ extends Control
 var _player_list: VBoxContainer
 var _start_btn: Button
 var _map_picker: OptionButton
+var _class_picker: OptionButton
 var _ready_btn: Button
 var _is_ready := false
 
@@ -57,7 +58,24 @@ func _ready() -> void:
 	list_panel.add_child(_player_list)
 	center.add_child(list_panel)
 
+	# Class switcher: you can change your pick without leaving the lobby.
+	var class_row := HBoxContainer.new()
+	class_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	class_row.add_theme_constant_override("separation", 10)
+	class_row.add_child(UiTheme.label("Your class", 15, Color(1, 1, 1, 0.6)))
+	_class_picker = OptionButton.new()
+	_class_picker.custom_minimum_size = Vector2(200, 40)
+	var classes := ClassRegistry.all()
+	for i in classes.size():
+		_class_picker.add_item("%s  (Q: %s)" % [classes[i].display_name, classes[i].primary_ability.display_name])
+		if classes[i].id == GameState.local_class_id:
+			_class_picker.select(i)
+	_class_picker.item_selected.connect(_on_class_selected)
+	class_row.add_child(_class_picker)
+	center.add_child(class_row)
+
 	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	bottom.add_theme_constant_override("separation", 12)
 	if NetworkManager.is_host:
 		_map_picker = OptionButton.new()
@@ -114,6 +132,12 @@ func _refresh() -> void:
 	if _start_btn != null:
 		_start_btn.disabled = not all_ready or ids.size() < 2
 		_start_btn.tooltip_text = "" if all_ready else "Waiting for everyone to ready up"
+
+
+func _on_class_selected(index: int) -> void:
+	var picked := ClassRegistry.all()[index]
+	GameState.local_class_id = picked.id
+	GameState.submit_player_info(GameState.local_name, picked.id)
 
 
 func _on_ready_toggled() -> void:
