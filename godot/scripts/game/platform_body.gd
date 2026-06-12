@@ -13,6 +13,7 @@ extends AnimatableBody2D
 var rect := Rect2()
 var type := "solid"
 var thru := false
+var ramp := 0  # 0 = flat; 1 rises to the right, -1 to the left (triangle)
 var move_data: Dictionary = {}  # {axis, amplitude, period, phase} or empty
 
 var _base_pos := Vector2.ZERO
@@ -23,8 +24,18 @@ static func create(data: Dictionary) -> PlatformBody:
 	p.rect = data["rect"]
 	p.type = data["type"]
 	p.thru = data.get("thru", false)
+	p.ramp = data.get("ramp", 0)
 	p.move_data = data.get("move", {})
 	return p
+
+
+## Local-space triangle for a ramp: full base, incline up toward the high
+## side. (rect is the bounding box.)
+func _ramp_points() -> PackedVector2Array:
+	var half := rect.size / 2.0
+	if ramp > 0:
+		return PackedVector2Array([Vector2(-half.x, half.y), Vector2(half.x, half.y), Vector2(half.x, -half.y)])
+	return PackedVector2Array([Vector2(-half.x, -half.y), Vector2(half.x, half.y), Vector2(-half.x, half.y)])
 
 
 func _ready() -> void:
@@ -36,9 +47,14 @@ func _ready() -> void:
 	position = rect.position + rect.size / 2.0
 	_base_pos = position
 	var shape := CollisionShape2D.new()
-	var rect_shape := RectangleShape2D.new()
-	rect_shape.size = rect.size
-	shape.shape = rect_shape
+	if ramp != 0:
+		var tri := ConvexPolygonShape2D.new()
+		tri.points = _ramp_points()
+		shape.shape = tri
+	else:
+		var rect_shape := RectangleShape2D.new()
+		rect_shape.size = rect.size
+		shape.shape = rect_shape
 	if thru:
 		collision_layer = 2
 		shape.one_way_collision = true
@@ -72,6 +88,18 @@ func _draw() -> void:
 	var edge := Color("#e8f7ff") if type == "ice" else Color("#575b85")
 	var dash := Color("#cdf2ff") if type == "ice" else Color("#9aa2d8")
 	var alpha := 0.5 if thru else 1.0
+	if ramp != 0:
+		var pts := _ramp_points()
+		draw_colored_polygon(pts, Color(fill, alpha))
+		# Highlight the walkable incline edge.
+		var lo := Vector2(-half.x, half.y) if ramp > 0 else Vector2(half.x, half.y)
+		var hi := Vector2(half.x, -half.y) if ramp > 0 else Vector2(-half.x, -half.y)
+		draw_line(lo, hi, edge, 4.0 if type == "ice" else 3.0)
+		if type == "ice":
+			for i in range(1, 4):
+				var g := lo.lerp(hi, float(i) / 4.0)
+				draw_line(g + Vector2(-4, 6), g + Vector2(4, 6), Color(1, 1, 1, 0.7), 2.0)
+		return
 	draw_rect(Rect2(-half, rect.size), Color(fill, alpha))
 	if thru:
 		var x := -half.x

@@ -115,6 +115,19 @@ static func _blockers(map: Dictionary) -> Array[Rect2]:
 	return out
 
 
+## Walkable height of a surface at horizontal position x (clamped into the
+## surface's span). Flat platforms are their rect top; ramps ("ramp": 1
+## rises to the right, -1 to the left) interpolate along the incline.
+static func _top_y_at(s: Dictionary, x: float) -> float:
+	var r := _sweep_rect(s)
+	if not s.has("ramp"):
+		return r.position.y
+	var f := clampf((x - r.position.x) / maxf(r.size.x, 1.0), 0.0, 1.0)
+	if s["ramp"] < 0:
+		f = 1.0 - f
+	return r.end.y - r.size.y * f
+
+
 ## A mover's rect expanded across its full travel range.
 static func _sweep_rect(p: Dictionary) -> Rect2:
 	var r: Rect2 = p["rect"]
@@ -158,14 +171,15 @@ static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bo
 		return false
 	var ra := _sweep_rect(a)
 	var rb := _sweep_rect(b)
-	var ay := ra.position.y
-	var by := rb.position.y
+	# Nearest takeoff/landing x; heights read off the actual walk surface at
+	# those points, so ramps take off from (and land on) their incline.
+	var tx := clampf(rb.get_center().x, ra.position.x, ra.position.x + ra.size.x)
+	var lx := clampf(tx, rb.position.x, rb.position.x + rb.size.x)
+	var ay := _top_y_at(a, tx)
+	var by := _top_y_at(b, lx)
 	var rise := ay - by  # > 0 means b is above a
 	if rise > jump_height():
 		return false
-	# Nearest takeoff/landing x.
-	var tx := clampf(rb.get_center().x, ra.position.x, ra.position.x + ra.size.x)
-	var lx := clampf(tx, rb.position.x, rb.position.x + rb.size.x)
 	var gap := absf(lx - tx)
 	# Air time: rise to apex, then fall to b's height.
 	var t_up := JUMP_V / GRAVITY
@@ -220,7 +234,7 @@ static func _support_under(map: Dictionary, pos: Vector2, max_drop := 70.0):
 	for s in _surfaces(map):
 		var r := _sweep_rect(s)
 		if pos.x >= r.position.x - 4.0 and pos.x <= r.position.x + r.size.x + 4.0:
-			var dy := r.position.y - pos.y
+			var dy := _top_y_at(s, pos.x) - pos.y
 			if dy >= -4.0 and dy <= best_dy:
 				best_dy = dy
 				best = s
@@ -391,7 +405,8 @@ static func _try_connect(map: Dictionary, anchor: Dictionary, target: Dictionary
 		map["platforms"].erase(step)
 
 	var rise := anchor_rect.position.y - target_rect.position.y
-	if rise > 0.0 and rise < spring_height():
+	# Spring pads need a flat footing — never aim one off a ramp.
+	if rise > 0.0 and rise < spring_height() and not anchor.has("ramp"):
 		var pad_x := clampf(target_rect.get_center().x, anchor_rect.position.x + 20.0, anchor_rect.position.x + anchor_rect.size.x - 20.0)
 		var pad := {"type": "spring", "pos": Vector2(pad_x, anchor_rect.position.y - 7.0)}
 		map["objects"].append(pad)
@@ -553,7 +568,7 @@ static func _fix_spawns(map: Dictionary, rng: SeededRng) -> void:
 	)
 	for s in sorted:
 		var r: Rect2 = s["rect"]
-		if r.size.x < 120.0 or s.has("move"):
+		if r.size.x < 120.0 or s.has("move") or s.has("ramp"):
 			continue
 		# Wide surfaces (like the ground) yield several spread-out spots.
 		var count := maxi(1, int(r.size.x / 480.0))
