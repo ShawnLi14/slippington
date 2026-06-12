@@ -201,7 +201,7 @@ static func generate(seed_string: String) -> Dictionary:
 			float(rng.next_int(100, width - 100)),
 			ground_y - GameConfig.PLAYER_SIZE))
 
-	return {
+	var map := {
 		"seed": seed_string,
 		"width": width,
 		"height": height,
@@ -209,6 +209,9 @@ static func generate(seed_string: String) -> Dictionary:
 		"objects": objects,
 		"spawn_points": spawn_points,
 	}
+	# Post-pass: traversal-graph validation and deterministic repair —
+	# everything must actually be reachable with real jump physics.
+	return MapPlanner.plan(map, rng)
 
 
 # --- landmark builders -----------------------------------------------------------

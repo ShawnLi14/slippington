@@ -36,19 +36,22 @@ static func _arena() -> Dictionary:
 			_p(810, 920, 300),                       # center step
 			_p(300, 820, 280, "passthrough"), _p(1340, 820, 280, "passthrough"),
 			_p(760, 720, 400),                       # central stage
-			_p(160, 620, 240), _p(1520, 620, 240),   # upper sides
-			_p(660, 520, 600, "passthrough"),        # high bridge
-			_p(400, 420, 200), _p(1320, 420, 200),   # top shelves
-			_p(860, 320, 200),                       # crown
+			# Upper half: every rise <= ~100px with short horizontal hops —
+			# the old layout looked right but was unreachable (planner gate).
+			_p(360, 640, 240), _p(1320, 640, 240),   # upper sides
+			_p(660, 540, 600, "passthrough"),        # high bridge
+			_p(430, 440, 200), _p(1290, 440, 200),   # top shelves
+			_p(700, 380, 140), _p(1080, 380, 140),   # crown steps
+			_p(860, 300, 200),                       # crown
 		],
 		"objects": [
-			{"type": "spring", "pos": Vector2(200, 1053)},
-			{"type": "spring", "pos": Vector2(1720, 1053)},
+			{"type": "spring", "pos": Vector2(60, 1053)},
+			{"type": "spring", "pos": Vector2(1860, 1053)},
 			{"type": "spring", "pos": Vector2(960, 713)},
 		],
 		"spawn_points": [
 			Vector2(300, 1020), Vector2(1620, 1020),
-			Vector2(960, 680), Vector2(960, 280),
+			Vector2(960, 680), Vector2(960, 260),
 		],
 	}
 
