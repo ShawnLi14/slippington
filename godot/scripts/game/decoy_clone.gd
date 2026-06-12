@@ -10,6 +10,13 @@ extends CharacterBody2D
 
 const POP_RADIUS := 30.0
 const FADE_SECS := 0.25
+## Brief opening sprint so the clone visibly splits off from the caster even
+## when both are running the same direction at the same speed — without it
+## the clone sits in lockstep underneath the caster on their own screen and
+## the ability looks like it did nothing. Enemies can't see the caster, so
+## to them the surge just reads as a panicked burst of speed.
+const SURGE_SECS := 0.45
+const SURGE_MULT := 1.5
 
 var clone_color := Color.WHITE
 var clone_name := "Player"
@@ -25,6 +32,7 @@ var _popped := false
 
 
 func _ready() -> void:
+	z_index = 1  # above player pawns, so the caster's faded self never hides it
 	collision_layer = 0  # blocks nothing, blockable by nothing
 	collision_mask = 1 | 2
 	var shape := CollisionShape2D.new()
@@ -56,7 +64,7 @@ func _physics_process(delta: float) -> void:
 
 	if not is_on_floor():
 		velocity.y += GameConfig.GRAVITY * delta
-	velocity.x = run_dir * speed
+	velocity.x = run_dir * speed * (SURGE_MULT if _age < SURGE_SECS else 1.0)
 	move_and_slide()
 
 	var half := GameConfig.PLAYER_SIZE / 2.0
@@ -66,7 +74,9 @@ func _physics_process(delta: float) -> void:
 	elif global_position.x > GameConfig.MAP_WIDTH - half:
 		global_position.x = GameConfig.MAP_WIDTH - half
 		_flip(-1.0)
-	elif is_on_wall():
+	elif is_on_wall() and get_wall_normal().x * run_dir < -0.5:
+		# Only a wall actually opposing travel turns the clone around — a
+		# corner graze that merely reports "on wall" must not flip it.
 		_flip(-run_dir)
 	if global_position.y > GameConfig.MAP_HEIGHT + 100.0:
 		_pop(false)

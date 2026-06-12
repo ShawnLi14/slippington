@@ -39,6 +39,12 @@ var _ability_frame := 0
 var _tag_count := 0
 var _done := false
 
+# host-swap mode state (scripted Swap correctness test).
+var _swap_state := "approach"
+var _swap_at := 0.0
+var _swap_pre_me := Vector2.ZERO
+var _swap_pre_other := Vector2.ZERO
+
 
 func _release_all() -> void:
 	for action in ["move_left", "move_right", "ability_primary"]:
@@ -71,25 +77,36 @@ func _ready() -> void:
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
 
 	var is_host := mode.begins_with("host")
-	_checks = {
-		"session": false,
-		"roster_2_players": false,
-		"playing_phase": false,
-		"stood_on_floor": false,  # catches a broken/missing map
-		"it_changed": false,
-		"timer_started": false,
-		"ability_fired": false,
-		"match_ended": false,
-	}
-	if not is_host:
-		_checks["remote_moved"] = false
-		_checks["remote_ability"] = false
-	# At least 2 tags must land: the first comes from the host bot, the
-	# tag-back from the client bot — proving remote tag claims register.
-	_checks["tag_back"] = false
-	if rounds_arg > 1:
-		_checks["round2_started"] = false
-		_checks["series_ended"] = false
+	if mode == "host-swap" or mode == "join-swap":
+		# Scripted Swap correctness test: the joiner stands still, the host
+		# approaches to a meaningful separation (well past tag contact, inside
+		# the 300px Swap range), casts, and asserts a true position exchange.
+		# No tags ever land, so the normal match checks don't apply.
+		_checks = {"session": false, "roster_2_players": false, "playing_phase": false}
+		if mode == "host-swap":
+			_checks["swap_positions"] = false
+			bot_class = "swapper"
+		timeout_sec = 25.0
+	else:
+		_checks = {
+			"session": false,
+			"roster_2_players": false,
+			"playing_phase": false,
+			"stood_on_floor": false,  # catches a broken/missing map
+			"it_changed": false,
+			"timer_started": false,
+			"ability_fired": false,
+			"match_ended": false,
+		}
+		if not is_host:
+			_checks["remote_moved"] = false
+			_checks["remote_ability"] = false
+		# At least 2 tags must land: the first comes from the host bot, the
+		# tag-back from the client bot — proving remote tag claims register.
+		_checks["tag_back"] = false
+		if rounds_arg > 1:
+			_checks["round2_started"] = false
+			_checks["series_ended"] = false
 
 	GameState.local_name = "HostBot" if is_host else "JoinBot"
 	GameState.local_class_id = "swapper" if is_host else "anchor"
@@ -162,11 +179,13 @@ func _ready() -> void:
 			_take_screenshot(1.5)
 			return
 		"shot-ability":
-			# Solo game; jump, fire the local class ability (--class=) mid-air,
-			# then capture its VFX while it's still on screen.
+			# Solo game; run, jump, fire the local class ability (--class=)
+			# mid-air, then capture its VFX while it's still on screen. Cast
+			# WHILE moving — the worst case for reading an ability's visuals.
 			NetworkManager.host_lan(port)
 			GameState.host_start_game(map_choice)
 			await get_tree().create_timer(1.2).timeout
+			Input.action_press("move_right")
 			Input.action_press("jump")
 			await get_tree().create_timer(0.05).timeout
 			Input.action_release("jump")
@@ -176,9 +195,9 @@ func _ready() -> void:
 			Input.action_release("ability_primary")
 			_take_screenshot(0.5)
 			return
-		"host":
+		"host", "host-swap":
 			NetworkManager.host_lan(port)
-		"join":
+		"join", "join-swap":
 			await get_tree().create_timer(1.5).timeout
 			NetworkManager.join_lan("127.0.0.1", port)
 		"host-online":
@@ -295,6 +314,16 @@ func _physics_process(delta: float) -> void:
 	if floor_me != null and floor_me.is_on_floor():
 		_pass("stood_on_floor")
 
+	if mode == "join-swap":
+		# Stand perfectly still as the swap partner; quit once the host has
+		# had ample time to run its assertions.
+		if _elapsed > 16.0:
+			_finish()
+		return
+	if mode == "host-swap":
+		_swap_test_step(game)
+		return
+
 	if bot_style == "smart":
 		_smart_move(game, delta)
 		return
@@ -342,6 +371,60 @@ func _physics_process(delta: float) -> void:
 			if p.peer_id != multiplayer.get_unique_id():
 				if p.global_position.distance_to(Vector2(300, 1020)) > 50.0:
 					_pass("remote_moved")
+
+
+## Scripted Swap correctness test (host-swap mode). The join-swap partner
+## stands perfectly still, so its puppet position is exact and tolerances can
+## be tight: after the cast, each player must be standing where the OTHER one
+## was. The approach stops well outside tag contact, so a pass can't come
+## from "both already in the same spot".
+func _swap_test_step(game: Game) -> void:
+	var me := game.local_player()
+	if me == null:
+		return
+	var other: Player = null
+	for p in game.get_player_nodes():
+		if p.peer_id != me.peer_id:
+			other = p
+	if other == null:
+		return
+	match _swap_state:
+		"approach":
+			var dx := other.global_position.x - me.global_position.x
+			if absf(dx) > 220.0:
+				Input.action_press("move_right" if dx > 0.0 else "move_left")
+			else:
+				_release_all()
+				Input.action_release("move_left")
+				Input.action_release("move_right")
+				_swap_state = "settle"
+				_swap_at = _elapsed + 0.6  # let velocity and the puppet stream settle
+		"settle":
+			if _elapsed >= _swap_at:
+				_swap_pre_me = me.global_position
+				_swap_pre_other = other.global_position
+				var sep := _swap_pre_me.distance_to(_swap_pre_other)
+				print("[bot %s] swap cast: me %s other %s (separation %.0f px)" % [mode, _swap_pre_me, _swap_pre_other, sep])
+				if sep < 150.0:
+					_fail("swap test separation too small to be meaningful")
+					return
+				me.try_use_ability()
+				if me.get_cooldown_remaining() <= 0.0:
+					_fail("swap did not fire (no cooldown started)")
+					return
+				_swap_state = "eval"
+				_swap_at = _elapsed + 0.5  # partner RPC + its sync stream round-trip
+		"eval":
+			if _elapsed >= _swap_at:
+				var d_me := me.global_position.distance_to(_swap_pre_other)
+				var d_other := other.global_position.distance_to(_swap_pre_me)
+				print("[bot %s] after swap: me %s (%.0f px off partner's old spot), other %s (%.0f px off my old spot)" % [mode, me.global_position, d_me, other.global_position, d_other])
+				if d_me <= 60.0 and d_other <= 60.0:
+					_pass("swap_positions")
+					_swap_state = "done"
+					_finish()
+				else:
+					_fail("positions did not truly exchange (me off by %.0f, partner off by %.0f)" % [d_me, d_other])
 
 	# Success: everything checked — wind down early.
 	var all_passed := true
