@@ -70,3 +70,14 @@ static func fullscreen_bg(parent: Control) -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.z_index = -1
 	parent.add_child(bg)
+
+
+## The game's animated sky + a readability veil — shared by menu screens.
+static func menu_backdrop(parent: Control) -> void:
+	var bg := GameBackground.new()
+	bg.bg_theme = BackgroundThemes.sky_islands()
+	parent.add_child(bg)
+	var veil := ColorRect.new()
+	veil.color = Color(0.05, 0.06, 0.12, 0.42)
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(veil)

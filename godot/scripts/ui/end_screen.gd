@@ -7,7 +7,7 @@ extends Control
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	UiTheme.fullscreen_bg(self)
+	UiTheme.menu_backdrop(self)
 
 	var center := VBoxContainer.new()
 	UiTheme.anchor_rect(center, Control.PRESET_CENTER, Rect2(-330, -300, 660, 600))
