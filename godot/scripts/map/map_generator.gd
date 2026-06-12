@@ -11,7 +11,7 @@ class_name MapGenerator
 ##     "objects":   [{ "type": "spring", "pos": Vector2 }],
 ##     "spawn_points": [Vector2] }
 
-const MIN_PLATFORM_WIDTH := 120
+const MIN_PLATFORM_WIDTH := 180
 const MAX_PLATFORM_WIDTH := 280
 const PLATFORM_HEIGHT := 16.0
 const GROUND_HEIGHT := 20.0

@@ -30,25 +30,35 @@ static func spring_height() -> float:
 
 
 ## Repairs the map in place (adds/removes platforms and objects) until the
-## traversal graph is fully connected from the ground. Deterministic: all
+## traversal graph is fully connected from the ground AND 2-connected (no
+## single surface is the only route anywhere). Deterministic: all
 ## randomness comes from the caller's seeded rng.
+##
+## The stages interact (a bottleneck repair can put a step over a spring;
+## an object scrub can remove a route), so the whole pipeline iterates to
+## a fixed point.
 static func plan(map: Dictionary, rng: SeededRng) -> Dictionary:
 	_strip_colliding_movers(map)
-	for pass_i in REPAIR_PASSES:
-		var unreachable := _unreachable_surfaces(map)
-		if unreachable.is_empty():
-			break
-		for surf in unreachable:
+	for outer in 3:
+		for pass_i in REPAIR_PASSES:
+			var unreachable := _unreachable_surfaces(map)
+			if unreachable.is_empty():
+				break
+			for surf in unreachable:
+				_repair_surface(map, surf, rng)
+		# Anything still orphaned gets deleted along with objects riding it.
+		for surf in _unreachable_surfaces(map):
+			_delete_surface(map, surf)
+		_scrub_objects(map)
+		# Removing objects can remove access routes — one more repair round.
+		for surf in _unreachable_surfaces(map):
 			_repair_surface(map, surf, rng)
-	# Anything still orphaned gets deleted along with objects riding it.
-	for surf in _unreachable_surfaces(map):
-		_delete_surface(map, surf)
-	_scrub_objects(map)
-	# Removing objects can remove access routes — one more repair round.
-	for surf in _unreachable_surfaces(map):
-		_repair_surface(map, surf, rng)
-	for surf in _unreachable_surfaces(map):
-		_delete_surface(map, surf)
+		for surf in _unreachable_surfaces(map):
+			_delete_surface(map, surf)
+		# Route diversity: no single surface may be the only way anywhere.
+		_repair_bottlenecks(map, rng)
+		if validate(map).is_empty():
+			break
 	_fix_spawns(map, rng)
 	return map
 
@@ -78,6 +88,9 @@ static func validate(map: Dictionary) -> Array:
 		if p.has("move") and _mover_sweep_collides(map, p):
 			var r: Rect2 = p["rect"]
 			issues.append("mover sweeps through geometry at %.0f,%.0f" % [r.position.x, r.position.y])
+	for b in _find_bottlenecks(map):
+		var r: Rect2 = b["cut"]["rect"]
+		issues.append("bottleneck at %.0f,%.0f isolates %d surface(s)" % [r.position.x, r.position.y, b["orphans"].size()])
 	return issues
 
 
@@ -220,45 +233,95 @@ static func _portal_support(map: Dictionary, pos: Vector2):
 	return _support_under(map, pos, 70.0)
 
 
-## BFS from the ground over jump/fall/spring/portal edges; returns the set
-## of reachable surfaces (as an Array of platform dicts).
-static func _reachable_set(map: Dictionary) -> Array:
+## Builds the full traversal graph ONCE: surfaces as indexed nodes, with
+## directed adjacency from jump/fall arcs, spring launches and portals.
+## All reachability questions (including cut-vertex analysis) then run as
+## cheap BFS over the cached adjacency.
+static func _build_graph(map: Dictionary) -> Dictionary:
 	var surfaces := _surfaces(map)
-	if surfaces.is_empty():
-		return []
 	var blockers := _blockers(map)
-	var ground = null
-	for s in surfaces:
-		if ground == null or s["rect"].position.y > ground["rect"].position.y:
-			ground = s
-	var reachable := [ground]
-	var frontier := [ground]
-	while not frontier.is_empty():
-		var cur = frontier.pop_back()
-		for s in surfaces:
-			if s in reachable:
+	var n := surfaces.size()
+	var adj: Array = []
+	for i in n:
+		adj.append([])
+	for i in n:
+		for j in n:
+			if i != j and _edge_ok(surfaces[i], surfaces[j], blockers):
+				adj[i].append(j)
+	for obj in map.get("objects", []):
+		if obj["type"] == "spring":
+			var support = _spring_support(map, obj)
+			if support == null:
 				continue
-			if _edge_ok(cur, s, blockers):
-				reachable.append(s)
-				frontier.append(s)
-		for obj in map.get("objects", []):
-			if obj["type"] == "spring":
-				var support = _spring_support(map, obj)
-				if support != cur:
-					continue
-				for s in surfaces:
-					if s in reachable:
-						continue
-					if _spring_edge_ok(obj["pos"], support, s, blockers):
-						reachable.append(s)
-						frontier.append(s)
-			elif obj["type"] == "portal":
-				var enter = _portal_support(map, obj["pos"])
-				var exit_surf = _portal_support(map, obj["dest"])
-				if enter == cur and exit_surf != null and not exit_surf in reachable:
-					reachable.append(exit_surf)
-					frontier.append(exit_surf)
-	return reachable
+			var si := surfaces.find(support)
+			for j in n:
+				if j != si and _spring_edge_ok(obj["pos"], support, surfaces[j], blockers):
+					if not j in adj[si]:
+						adj[si].append(j)
+		elif obj["type"] == "portal":
+			var enter = _portal_support(map, obj["pos"])
+			var exit_surf = _portal_support(map, obj["dest"])
+			if enter != null and exit_surf != null:
+				var ei := surfaces.find(enter)
+				var xi := surfaces.find(exit_surf)
+				if ei != xi and not xi in adj[ei]:
+					adj[ei].append(xi)
+	var ground := 0
+	for i in n:
+		if surfaces[i]["rect"].position.y > surfaces[ground]["rect"].position.y:
+			ground = i
+	return {"surfaces": surfaces, "adj": adj, "ground": ground}
+
+
+## BFS over a prebuilt graph; skip_idx simulates removing one surface.
+static func _bfs(graph: Dictionary, skip_idx := -1) -> Array:
+	var n: int = graph["surfaces"].size()
+	var reached: Array = []
+	reached.resize(n)
+	reached.fill(false)
+	var ground: int = graph["ground"]
+	if n == 0 or ground == skip_idx:
+		return reached
+	reached[ground] = true
+	var frontier: Array = [ground]
+	while not frontier.is_empty():
+		var cur: int = frontier.pop_back()
+		for nxt in graph["adj"][cur]:
+			if nxt != skip_idx and not reached[nxt]:
+				reached[nxt] = true
+				frontier.append(nxt)
+	return reached
+
+
+static func _reachable_set(map: Dictionary) -> Array:
+	var graph := _build_graph(map)
+	var reached := _bfs(graph)
+	var out: Array = []
+	for i in graph["surfaces"].size():
+		if reached[i]:
+			out.append(graph["surfaces"][i])
+	return out
+
+
+## Bottlenecks: surfaces whose removal disconnects other (normally
+## reachable) surfaces from the ground — the "guard the only ladder" spots.
+## Returns [{cut: surface, orphans: [surface...]}], worst first.
+static func _find_bottlenecks(map: Dictionary) -> Array:
+	var graph := _build_graph(map)
+	var base := _bfs(graph)
+	var out: Array = []
+	for v in graph["surfaces"].size():
+		if v == graph["ground"] or not base[v]:
+			continue
+		var without := _bfs(graph, v)
+		var orphans: Array = []
+		for i in graph["surfaces"].size():
+			if i != v and base[i] and not without[i]:
+				orphans.append(graph["surfaces"][i])
+		if not orphans.is_empty():
+			out.append({"cut": graph["surfaces"][v], "orphans": orphans})
+	out.sort_custom(func(a, b): return a["orphans"].size() > b["orphans"].size())
+	return out
 
 
 static func _unreachable_surfaces(map: Dictionary) -> Array:
@@ -278,24 +341,34 @@ static func _repair_surface(map: Dictionary, surf: Dictionary, rng: SeededRng) -
 	var reachable := _reachable_set(map)
 	if surf in reachable or reachable.is_empty():
 		return
-	# Nearest reachable surface as the repair anchor.
-	var target_rect: Rect2 = surf["rect"]
-	var anchor = null
-	var best := INF
-	for r in reachable:
-		var d: float = r["rect"].get_center().distance_to(target_rect.get_center())
-		if d < best:
-			best = d
-			anchor = r
-	if anchor == null:
-		return
+	var anchor = _nearest(reachable, surf)
+	if anchor != null:
+		_try_connect(map, anchor, surf, rng)
+	# On failure the delete pass cleans it up.
+
+
+static func _nearest(pool: Array, surf: Dictionary):
+	var best = null
+	var best_d := INF
+	var c: Vector2 = surf["rect"].get_center()
+	for r in pool:
+		var d: float = r["rect"].get_center().distance_to(c)
+		if d < best_d:
+			best_d = d
+			best = r
+	return best
+
+
+## Try to create a route anchor -> target: first a stepping platform
+## halfway, then a spring on the anchor aimed at the target.
+static func _try_connect(map: Dictionary, anchor: Dictionary, target: Dictionary, rng: SeededRng) -> bool:
 	var anchor_rect: Rect2 = anchor["rect"]
+	var target_rect: Rect2 = target["rect"]
 	var blockers := _blockers(map)
 
-	# Repair A: a stepping platform halfway between anchor and target.
 	var mid := (anchor_rect.get_center() + target_rect.get_center()) / 2.0
 	for attempt in 4:
-		var w := 150.0
+		var w := 180.0
 		var x := clampf(mid.x - w / 2.0 + rng.next_float(-70.0, 70.0), 20.0, GameConfig.MAP_WIDTH - w - 20.0)
 		var y := clampf(mid.y + rng.next_float(-40.0, 40.0), 90.0, GameConfig.MAP_HEIGHT - 120.0)
 		var rect := Rect2(x, y, w, 16.0)
@@ -308,20 +381,66 @@ static func _repair_surface(map: Dictionary, surf: Dictionary, rng: SeededRng) -
 			continue
 		var step := {"rect": rect, "type": "solid"}
 		map["platforms"].append(step)
-		if _edge_ok(anchor, step, _blockers(map)) and _edge_ok(step, surf, _blockers(map)):
-			return  # success
+		if _edge_ok(anchor, step, _blockers(map)) and _edge_ok(step, target, _blockers(map)):
+			return true
 		map["platforms"].erase(step)
 
-	# Repair B: a spring on the anchor aimed at the target.
 	var rise := anchor_rect.position.y - target_rect.position.y
 	if rise > 0.0 and rise < spring_height():
 		var pad_x := clampf(target_rect.get_center().x, anchor_rect.position.x + 20.0, anchor_rect.position.x + anchor_rect.size.x - 20.0)
 		var pad := {"type": "spring", "pos": Vector2(pad_x, anchor_rect.position.y - 7.0)}
 		map["objects"].append(pad)
-		if _spring_edge_ok(pad["pos"], anchor, surf, blockers) and _spring_has_headroom(map, pad):
-			return
+		if _spring_edge_ok(pad["pos"], anchor, target, blockers) and _spring_has_headroom(map, pad):
+			return true
 		map["objects"].erase(pad)
-	# Couldn't repair — the delete pass will clean it up.
+	return false
+
+
+## Eliminate single-surface bottlenecks: for every cut vertex, give its
+## orphans a second, independent route (or delete tiny orphan sets as the
+## last resort) until the graph is 2-connected with respect to the ground.
+static func _repair_bottlenecks(map: Dictionary, rng: SeededRng) -> void:
+	# Nested cuts (ladders) unwind one per pass, so allow plenty; every pass
+	# either adds a route or deletes the orphans, so progress is guaranteed,
+	# but stall-detect anyway in case a repair has no effect.
+	var prev_count := -1
+	var stalls := 0
+	for pass_i in 24:
+		var bottlenecks := _find_bottlenecks(map)
+		if bottlenecks.is_empty():
+			return
+		if bottlenecks.size() == prev_count:
+			stalls += 1
+			if stalls >= 3:
+				# Force progress: delete the worst offender's orphans.
+				for orphan in bottlenecks[0]["orphans"]:
+					_delete_surface(map, orphan)
+				stalls = 0
+				continue
+		else:
+			stalls = 0
+		prev_count = bottlenecks.size()
+		var b: Dictionary = bottlenecks[0]
+		var graph := _build_graph(map)
+		var cut_idx: int = graph["surfaces"].find(b["cut"])
+		var without := _bfs(graph, cut_idx)
+		var anchors: Array = []
+		for i in graph["surfaces"].size():
+			if without[i]:
+				anchors.append(graph["surfaces"][i])
+		# Connect the lowest orphan from a surface that survives the cut.
+		var orphans: Array = b["orphans"]
+		orphans.sort_custom(func(x, y): return x["rect"].position.y > y["rect"].position.y)
+		var connected := false
+		for orphan in orphans:
+			var anchor = _nearest(anchors, orphan)
+			if anchor != null and _try_connect(map, anchor, orphan, rng):
+				connected = true
+				break
+		if not connected:
+			# Last resort: drop the orphaned surfaces entirely.
+			for orphan in orphans:
+				_delete_surface(map, orphan)
 
 
 static func _delete_surface(map: Dictionary, surf: Dictionary) -> void:

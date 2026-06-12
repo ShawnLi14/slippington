@@ -11,13 +11,20 @@ const PRESETS := {
 
 
 static func get_preset(id: String) -> Dictionary:
+	var map: Dictionary
 	match id:
 		"arena":
-			return _arena()
+			map = _arena()
 		"towers":
-			return _towers()
-	push_error("Unknown map preset: %s" % id)
-	return MapGenerator.generate(id)
+			map = _towers()
+		_:
+			push_error("Unknown map preset: %s" % id)
+			return MapGenerator.generate(id)
+	# Presets go through the same planner pipeline as generated maps (with
+	# a fixed seed, so the augmentations are identical everywhere): the
+	# hand-made layout is the design, the planner guarantees it's sound
+	# and bottleneck-free.
+	return MapPlanner.plan(map, SeededRng.new("preset_" + id))
 
 
 static func _p(x: float, y: float, w: float, type: String = "solid") -> Dictionary:
