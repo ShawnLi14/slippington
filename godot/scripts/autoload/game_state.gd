@@ -35,6 +35,7 @@ var match_remaining := 0.0
 var results: Array = []
 
 var _host_ability_last_use: Dictionary = {}  # peer_id -> {ability_id: msec}
+var host_ability_use_counts: Dictionary = {}  # peer_id -> int (telemetry)
 var _next_color := 0
 
 
@@ -195,6 +196,7 @@ func host_start_game(map_choice: String, forced_it := -1) -> void:
 		players[id]["time_as_it"] = 0.0
 		players[id]["ready"] = id == 1
 	_host_ability_last_use.clear()
+	host_ability_use_counts.clear()
 	start_game.rpc(seed_str, players)
 
 
@@ -354,6 +356,7 @@ func _host_handle_ability(peer_id: int, ability_id: String) -> void:
 	if not _host_ability_last_use.has(peer_id):
 		_host_ability_last_use[peer_id] = {}
 	_host_ability_last_use[peer_id][ability_id] = now
+	host_ability_use_counts[peer_id] = host_ability_use_counts.get(peer_id, 0) + 1
 	ability_executed.rpc(peer_id, ability_id)
 
 

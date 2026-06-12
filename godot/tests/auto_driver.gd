@@ -16,6 +16,14 @@ const TIMEOUT_SEC := 40.0
 var mode := ""
 var port := 7799
 var code_file := ""
+## "simple" = deterministic regression bots (chase when it, stand still
+## otherwise). "smart" = playtest bots: flee, jump, use abilities — produces
+## meaningful telemetry instead of pass/fail checks.
+var bot_style := "simple"
+var bot_class := ""
+
+var _jump_cooldown := 0.0
+var _ability_timer := 0.0
 
 var _elapsed := 0.0
 var _checks: Dictionary = {}
@@ -41,6 +49,10 @@ func _ready() -> void:
 			code_file = arg.trim_prefix("--code-file=")
 		elif arg.begins_with("--signaling="):
 			NetworkManager.signaling_url = arg.trim_prefix("--signaling=")
+		elif arg.begins_with("--bot-style="):
+			bot_style = arg.trim_prefix("--bot-style=")
+		elif arg.begins_with("--class="):
+			bot_class = arg.trim_prefix("--class=")
 
 	var is_host := mode.begins_with("host")
 	_checks = {
@@ -61,6 +73,9 @@ func _ready() -> void:
 
 	GameState.local_name = "HostBot" if is_host else "JoinBot"
 	GameState.local_class_id = "bolt" if is_host else "anchor"
+	if bot_class != "":
+		GameState.local_class_id = bot_class
+		GameState.local_name = bot_class.capitalize() + ("H" if is_host else "J")
 
 	NetworkManager.session_started.connect(func(): _pass("session"))
 	if mode != "join-bad-online":
@@ -224,6 +239,10 @@ func _physics_process(delta: float) -> void:
 	if game == null:
 		return
 
+	if bot_style == "smart":
+		_smart_move(game, delta)
+		return
+
 	# Fire the class ability once the match is underway. Retry with fresh
 	# presses until it registers — a press can land during tag hit-stop.
 	if GameState.match_running and not _own_ability_done:
@@ -277,6 +296,90 @@ func _physics_process(delta: float) -> void:
 		_finish()
 
 
+## Playtest bot: chase with jumps when "it"; flee, jump and panic-ability
+## when hunted. Produces realistic-ish chases for telemetry.
+func _smart_move(game: Game, delta: float) -> void:
+	var me := game.local_player()
+	if me == null:
+		return
+	_jump_cooldown = maxf(0.0, _jump_cooldown - delta)
+	_ability_timer += delta
+	Input.action_release("jump")
+
+	var it_id := GameState.it_peer
+	if me.is_it():
+		var target: Player = null
+		var nearest := INF
+		for p in game.get_player_nodes():
+			if p.peer_id == me.peer_id:
+				continue
+			var d: float = p.global_position.distance_to(me.global_position)
+			if d < nearest:
+				nearest = d
+				target = p
+		if target == null:
+			return
+		_run_toward(target.global_position.x, me)
+		# Jump if prey is above us, or periodically to clear platforms.
+		if me.is_on_floor() and _jump_cooldown <= 0.0 \
+				and (target.global_position.y < me.global_position.y - 60.0 or randf() < 0.01):
+			Input.action_press("jump")
+			_jump_cooldown = 0.6
+		if _ability_timer > 2.0 and nearest < 350.0:
+			_ability_timer = 0.0
+			Input.action_press("ability_primary")
+		else:
+			Input.action_release("ability_primary")
+	else:
+		var hunter := game.get_player_node(it_id)
+		Input.action_release("ability_primary")
+		if hunter == null:
+			_stop(me)
+			return
+		var dist: float = hunter.global_position.distance_to(me.global_position)
+		if dist < 520.0:
+			# Run away; hop when cornered or when the hunter is close.
+			var flee_dir: float = signf(me.global_position.x - hunter.global_position.x)
+			if flee_dir == 0.0:
+				flee_dir = 1.0
+			var cornered: bool = (me.global_position.x < 120.0 and flee_dir < 0.0) \
+				or (me.global_position.x > GameConfig.MAP_WIDTH - 120.0 and flee_dir > 0.0)
+			if cornered:
+				flee_dir = -flee_dir
+			_run_dir(flee_dir, me)
+			if me.is_on_floor() and _jump_cooldown <= 0.0 and (dist < 180.0 or cornered or randf() < 0.02):
+				Input.action_press("jump")
+				_jump_cooldown = 0.5
+			if dist < 200.0 and _ability_timer > 1.5:
+				_ability_timer = 0.0
+				Input.action_press("ability_primary")
+		else:
+			_stop(me)
+
+
+func _run_toward(x: float, me: Player) -> void:
+	if x > me.global_position.x + 12.0:
+		_run_dir(1.0, me)
+	elif x < me.global_position.x - 12.0:
+		_run_dir(-1.0, me)
+	else:
+		_stop(me)
+
+
+func _run_dir(dir: float, _me: Player) -> void:
+	if dir > 0.0:
+		Input.action_press("move_right")
+		Input.action_release("move_left")
+	else:
+		Input.action_press("move_left")
+		Input.action_release("move_right")
+
+
+func _stop(_me: Player) -> void:
+	Input.action_release("move_left")
+	Input.action_release("move_right")
+
+
 func _pass(check: String) -> void:
 	if _checks.has(check) and not _checks[check]:
 		_checks[check] = true
@@ -291,6 +394,11 @@ func _fail(reason: String) -> void:
 
 func _finish() -> void:
 	_done = true
+	if bot_style == "smart":
+		# Playtest runs are for telemetry, not pass/fail.
+		print("[bot %s] smart playtest complete" % mode)
+		get_tree().quit(0)
+		return
 	var failed := []
 	for k in _checks:
 		if not _checks[k]:

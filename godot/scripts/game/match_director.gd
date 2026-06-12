@@ -32,6 +32,13 @@ var _match_duration := GameConfig.MATCH_DURATION_SEC
 var _remaining := GameConfig.MATCH_DURATION_SEC
 var _last_broadcast_second := -1
 
+# Telemetry (host-only): chase lengths, map usage, written to
+# user://match_history.jsonl at match end and printed for bot harnesses.
+var _last_tag_ms := -1
+var _chase_durations: Array = []
+var _height_samples: Dictionary = {}  # peer_id -> {upper: int, total: int}
+var _sample_accumulator := 0.0
+
 
 func _ready() -> void:
 	GameState.match_director = self
@@ -53,6 +60,15 @@ func _physics_process(delta: float) -> void:
 		var it := GameState.it_peer
 		if GameState.players.has(it):
 			GameState.players[it]["time_as_it"] += delta
+		_sample_accumulator += delta
+		if _sample_accumulator >= 1.0:
+			_sample_accumulator = 0.0
+			for node in game.get_player_nodes():
+				if not _height_samples.has(node.peer_id):
+					_height_samples[node.peer_id] = {"upper": 0, "total": 0}
+				_height_samples[node.peer_id]["total"] += 1
+				if node.global_position.y < GameConfig.MAP_HEIGHT * 0.6:
+					_height_samples[node.peer_id]["upper"] += 1
 		_remaining -= delta
 		var whole_second := int(ceil(_remaining))
 		if whole_second != _last_broadcast_second:
@@ -98,8 +114,12 @@ func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2, interp
 
 
 func _transfer_tag(from_peer: int, to_peer: int) -> void:
+	var now := Time.get_ticks_msec()
+	if _last_tag_ms >= 0 and GameState.match_running:
+		_chase_durations.append(float(now - _last_tag_ms) / 1000.0)
+	_last_tag_ms = now
 	_immune_peer = from_peer  # the old "it" can't be tagged right back
-	_immune_until_ms = Time.get_ticks_msec() + int(GameConfig.TAG_IMMUNITY_SEC * 1000.0)
+	_immune_until_ms = now + int(GameConfig.TAG_IMMUNITY_SEC * 1000.0)
 	GameState.set_it.rpc(to_peer, from_peer)
 	if not GameState.match_running:
 		_remaining = _match_duration
@@ -127,3 +147,37 @@ func _end_match() -> void:
 		return a["peer_id"] < b["peer_id"]
 	)
 	GameState.end_match.rpc(ranked)
+	_write_telemetry(ranked)
+
+
+func _write_telemetry(ranked: Array) -> void:
+	var player_stats: Array = []
+	for r in ranked:
+		var id: int = r["peer_id"]
+		var heights: Dictionary = _height_samples.get(id, {"upper": 0, "total": 1})
+		player_stats.append({
+			"name": r["name"],
+			"class": GameState.players.get(id, {}).get("class_id", "?"),
+			"time_as_it": snappedf(r["time_as_it"], 0.1),
+			"caught": r["was_it_at_end"],
+			"ability_uses": GameState.host_ability_use_counts.get(id, 0),
+			"upper_map_pct": snappedf(100.0 * heights["upper"] / maxf(1.0, heights["total"]), 1.0),
+		})
+	var telemetry := {
+		"ts": Time.get_datetime_string_from_system(),
+		"map": GameState.map_seed,
+		"duration": _match_duration,
+		"tags": _chase_durations.size() + 1,
+		"chase_durations": _chase_durations.map(func(d): return snappedf(d, 0.1)),
+		"players": player_stats,
+	}
+	var line := JSON.stringify(telemetry)
+	print("[telemetry] " + line)
+	var path := "user://match_history.jsonl"
+	var existing := ""
+	if FileAccess.file_exists(path):
+		existing = FileAccess.get_file_as_string(path)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(existing + line + "\n")
+		f.close()
