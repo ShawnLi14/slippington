@@ -1,0 +1,13 @@
+{
+  "name": "slippington-signaling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebRTC signaling server for Slippington — join codes + SDP/ICE relay",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

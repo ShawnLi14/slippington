@@ -1,36 +1,16 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Slippington
 
-## Getting Started
+Multiplayer 2D platformer tag.
 
-First, run the development server:
+**The game now lives in [`godot/`](godot/)** — a Godot 4.4 rebuild with direct
+peer-to-peer connections (WebRTC join codes, ENet for LAN), native Mac and
+Windows builds, three classes (Slipper / Bolt / Anchor) with abilities, seeded
+procedural maps, and time-as-"it" scoring. See `godot/README.md` to run it.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+[`signaling/`](signaling/) is the tiny WebSocket server that brokers the
+P2P handshake (join codes + SDP/ICE relay) — no gameplay traffic flows
+through it. See `signaling/README.md` for free-tier deploy notes.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The original web prototype (Next.js + Phaser + Supabase Realtime) lives in
+[`legacy/`](legacy/) as reference; it synced movement through Postgres,
+which is why latency was poor.

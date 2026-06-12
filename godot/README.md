@@ -1,0 +1,74 @@
+# Slippington (Godot rebuild)
+
+Multiplayer 2D platformer tag, rebuilt in **Godot 4.4.1-stable** with direct
+peer-to-peer connections (WebRTC) between players.
+
+## Requirements
+
+- **Godot 4.4.1-stable** exactly — export templates and the bundled WebRTC
+  extension are version-sensitive. Download: https://godotengine.org/download/archive/4.4.1-stable/
+- The [webrtc-native GDExtension](https://github.com/godotengine/webrtc-native)
+  v1.1.0 is committed into this folder (`webrtc/` + `webrtc.gdextension`).
+  Without it, online (code-based) play is disabled but LAN/direct-IP still works.
+
+## Run
+
+Open this folder in the Godot editor and press F5, or:
+
+```
+godot --path .   # with godot 4.4.1 on PATH
+```
+
+Two-instance local test: Debug > Run Multiple Instances in the editor, or
+launch the binary twice and use Direct Connect with IP `127.0.0.1`.
+
+## Playing online (join codes)
+
+1. Run the signaling server somewhere reachable (see `../signaling/README.md`).
+   For a quick local test: `cd ../signaling && npm start` (listens on :9080).
+2. In the menu, set the signaling server URL (defaults to `ws://127.0.0.1:9080`),
+   click **CREATE GAME** and share the 5-letter code.
+3. Friends enter the code and click **JOIN**. Game traffic flows directly
+   between players (the signaling server only brokers the handshake).
+
+If a connection fails ("connection blocked by network"), both players are
+likely behind strict NATs — use Direct Connect with a port-forwarded host,
+or play on the same LAN.
+
+## Architecture (short version)
+
+- **Per-peer movement authority**: your machine simulates your own player —
+  zero input latency. Positions replicate at 30 Hz over unreliable channels;
+  remote players are interpolated puppets.
+- **Host-authoritative rules**: the hosting player's machine decides tags,
+  the 60s match timer, scoring (least time as "it" wins) and validates
+  ability cooldowns.
+- **Transports**: `WebRTCMultiplayerPeer` (star topology, host = peer 1) for
+  online play; `ENetMultiplayerPeer` for LAN/direct IP. All game code is
+  transport-agnostic Godot high-level multiplayer (RPCs).
+
+## Tests
+
+Map generation must be deterministic across platforms (same seed → same map
+on every client). Verify on each OS and diff the output:
+
+```
+godot --headless --path . --script res://tests/test_mapgen.gd
+```
+
+Full multiplayer integration test (two headless bot instances play a real
+match: connect, lobby, tag, abilities, scored finish). Run in two terminals:
+
+```
+godot --headless --path . -- --auto=host --port=7799 --match-seconds=8
+godot --headless --path . -- --auto=join --port=7799
+```
+
+Same over WebRTC + signaling (start `npm start` in ../signaling first):
+
+```
+godot --headless --path . -- --auto=host-online --code-file=/tmp/code.txt --signaling=ws://127.0.0.1:9080 --match-seconds=8
+godot --headless --path . -- --auto=join-online --code-file=/tmp/code.txt --signaling=ws://127.0.0.1:9080
+```
+
+Each instance prints PASS/FAIL per check and exits 0 only if all pass.
