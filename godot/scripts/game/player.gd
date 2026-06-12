@@ -5,9 +5,14 @@ extends CharacterBody2D
 ## on every other peer this node is a puppet that interpolates toward the
 ## latest received state. Game rules (tagging, timer) live on the host.
 
-const PUPPET_LERP_RATE := 15.0
-const PUPPET_SNAP_DISTANCE := 250.0
 const DROP_THROUGH_TIME := 0.3
+## Remote players render this far in the past, interpolated between real
+## snapshots — smooth, with a fixed and known delay instead of a trailing lerp.
+const INTERP_DELAY := 0.075
+const MAX_EXTRAPOLATION := 0.1
+## While "it" and touching someone, re-claim at most this often; the host
+## rejects claims during tag immunity, so contact re-tags once it expires.
+const CLAIM_INTERVAL_MS := 250
 
 var peer_id := 1
 var player_class: PlayerClass
@@ -22,11 +27,11 @@ var _dash_speed := 0.0
 var _drop_through_left := 0.0
 var _cooldown_until_ms := 0
 
-# Puppet interpolation state
-var _target_position := Vector2.ZERO
-var _target_velocity := Vector2.ZERO
+# Puppet interpolation state: [{t, pos, vel}] in receiver-clock seconds
+var _snapshots: Array = []
 var _teleport_count := 0
 var _seen_teleport_count := 0
+var _last_claim_ms := 0
 
 var _sync_accumulator := 0.0
 var _name_label: Label
@@ -40,7 +45,6 @@ func setup(p_peer_id: int, info: Dictionary, spawn_pos: Vector2) -> void:
 	color = GameConfig.PLAYER_COLORS[info.get("color_index", 0)]
 	display_name_text = info.get("name", "Player")
 	global_position = spawn_pos
-	_target_position = spawn_pos
 	set_multiplayer_authority(p_peer_id)
 	add_to_group("players")
 
@@ -130,6 +134,12 @@ func _authority_physics(delta: float) -> void:
 
 	move_and_slide()
 
+	# Tagger-side hit detection: the "it" player's own client decides when
+	# contact happens (true self vs. the puppets it actually sees), then the
+	# host validates the claim. What you see is what you tag.
+	if is_it():
+		_check_tagging()
+
 	# Hard world bounds (map edges).
 	var half := GameConfig.PLAYER_SIZE / 2.0
 	global_position.x = clampf(global_position.x, half, GameConfig.MAP_WIDTH - half)
@@ -146,21 +156,42 @@ func _authority_physics(delta: float) -> void:
 		queue_redraw()
 
 
-func _puppet_interpolate(delta: float) -> void:
-	if global_position.distance_to(_target_position) > PUPPET_SNAP_DISTANCE:
-		global_position = _target_position
+func _puppet_interpolate(_delta: float) -> void:
+	if _snapshots.is_empty():
+		return
+	var render_t := Time.get_ticks_msec() / 1000.0 - INTERP_DELAY
+	var prev: Dictionary
+	var next: Dictionary
+	for s in _snapshots:
+		if s["t"] <= render_t:
+			prev = s
+		else:
+			next = s
+			break
+	var target: Vector2
+	if prev.is_empty():
+		target = _snapshots[0]["pos"]
+	elif next.is_empty():
+		# Newest snapshot is older than the render time (packet gap):
+		# extrapolate along last known velocity, but only briefly.
+		var dt: float = clampf(render_t - prev["t"], 0.0, MAX_EXTRAPOLATION)
+		target = prev["pos"] + prev["vel"] * dt
 	else:
-		var t := 1.0 - exp(-PUPPET_LERP_RATE * delta)
-		global_position = global_position.lerp(_target_position + _target_velocity * delta, t)
+		var span: float = next["t"] - prev["t"]
+		var f: float = 0.0 if span <= 0.0 else (render_t - prev["t"]) / span
+		target = prev["pos"].lerp(next["pos"], f)
+	global_position = target
 
 
 @rpc("authority", "call_remote", "unreliable")
 func sync_state(pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int) -> void:
-	_target_position = pos
-	_target_velocity = vel
 	if teleports != _seen_teleport_count:
 		_seen_teleport_count = teleports
-		global_position = pos  # blink/teleport: snap, don't glide
+		_snapshots.clear()  # blink/teleport: snap, don't glide through the gap
+		global_position = pos
+	_snapshots.append({"t": Time.get_ticks_msec() / 1000.0, "pos": pos, "vel": vel})
+	while _snapshots.size() > 30:
+		_snapshots.pop_front()
 	if p_facing != facing_right or p_anim != anim_state:
 		facing_right = p_facing
 		anim_state = p_anim
@@ -171,6 +202,22 @@ func _set_facing(right: bool) -> void:
 	if facing_right != right:
 		facing_right = right
 		queue_redraw()
+
+
+func _check_tagging() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_claim_ms < CLAIM_INTERVAL_MS:
+		return
+	for other in get_tree().get_nodes_in_group("players"):
+		if other == self:
+			continue
+		# Box overlap of the two 40px sprites — matches what the player sees,
+		# unlike a center-distance check which is stingier on diagonals.
+		if absf(other.global_position.x - global_position.x) < GameConfig.PLAYER_SIZE \
+				and absf(other.global_position.y - global_position.y) < GameConfig.PLAYER_SIZE:
+			_last_claim_ms = now
+			GameState.claim_tag_local(other.peer_id)
+			return
 
 
 # --- abilities ----------------------------------------------------------------

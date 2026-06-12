@@ -21,6 +21,7 @@ var _elapsed := 0.0
 var _checks: Dictionary = {}
 var _started_game := false
 var _used_ability := false
+var _tag_count := 0
 var _done := false
 
 
@@ -53,6 +54,9 @@ func _ready() -> void:
 	if not is_host:
 		_checks["remote_moved"] = false
 		_checks["remote_ability"] = false
+	# At least 2 tags must land: the first comes from the host bot, the
+	# tag-back from the client bot — proving remote tag claims register.
+	_checks["tag_back"] = false
 
 	GameState.local_name = "HostBot" if is_host else "JoinBot"
 	GameState.local_class_id = "bolt" if is_host else "anchor"
@@ -63,6 +67,9 @@ func _ready() -> void:
 	GameState.phase_changed.connect(_on_phase_changed)
 	GameState.it_changed.connect(func(new_it, old_it):
 		_pass("it_changed")
+		_tag_count += 1
+		if _tag_count >= 2:
+			_pass("tag_back")
 		print("[bot %s] tag: %d -> %d" % [mode, old_it, new_it])
 	)
 	GameState.match_started.connect(func(_remaining): _pass("timer_started"))
@@ -194,14 +201,18 @@ func _physics_process(delta: float) -> void:
 	elif _used_ability:
 		Input.action_release("ability_primary")
 
-	if mode.begins_with("host"):
-		# Walk toward the nearest other player to force a tag.
-		var me := game.local_player()
+	# Whoever is "it" chases the other player; everyone else stands still.
+	# With contact re-tagging after immunity, the tag ping-pongs — exercising
+	# tag claims from BOTH the host and the remote client.
+	var me := game.local_player()
+	if me == null:
+		return
+	if me.is_it():
 		var target: Player = null
 		for p in game.get_player_nodes():
 			if p.peer_id != me.peer_id:
 				target = p
-		if me == null or target == null:
+		if target == null:
 			return
 		if target.global_position.x > me.global_position.x + 10.0:
 			Input.action_press("move_right")
@@ -213,11 +224,14 @@ func _physics_process(delta: float) -> void:
 			Input.action_release("move_left")
 			Input.action_release("move_right")
 	else:
+		Input.action_release("move_left")
+		Input.action_release("move_right")
+
+	if not mode.begins_with("host"):
 		# Join bot: verify the host's pawn actually moves on our screen.
 		for p in game.get_player_nodes():
 			if p.peer_id != multiplayer.get_unique_id():
-				if not p.global_position.is_equal_approx(Vector2(300, 1020)) \
-						and p.global_position.distance_to(Vector2(300, 1020)) > 50.0:
+				if p.global_position.distance_to(Vector2(300, 1020)) > 50.0:
 					_pass("remote_moved")
 
 	# Success: everything checked — wind down early.

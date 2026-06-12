@@ -1,15 +1,21 @@
 class_name MatchDirector
 extends Node
-## Host-only match rules: tag detection, the round timer and scoring.
-## Runs nowhere else — clients learn everything via GameState RPC broadcasts.
+## Host-only match referee: validates tag claims, runs the round timer and
+## scoring. Runs nowhere else — clients learn everything via GameState RPCs.
 ##
-## Tagging is edge-triggered (you must leave tag range and re-enter to tag
-## again) and the freshly tagged player gets a short immunity window so two
-## players brushing past each other don't ping-pong the tag.
+## Tag detection happens on the "it" player's own client (true position vs.
+## the puppets it sees) so tags land exactly when the chaser sees contact;
+## this node arbitrates the claims: only the real "it" can tag, the freshly
+## tagged player gets a short immunity window so contact doesn't ping-pong
+## the tag, and the claim must be plausible from the host's view of both
+## players (generous bound to absorb replication lag).
+
+## Host-side sanity bound on a claimed tag. The claimant's position is up
+## to ~150ms stale on the host; at top speed that's ~60px on each player.
+const CLAIM_MAX_DISTANCE := 140.0
 
 var game: Node2D  # the Game scene, used to look up player nodes
 
-var _colliding: Dictionary = {}      # peer_id -> true while inside tag range
 var _immune_peer := -1
 var _immune_until_ms := 0
 var _match_duration := GameConfig.MATCH_DURATION_SEC
@@ -18,18 +24,21 @@ var _last_broadcast_second := -1
 
 
 func _ready() -> void:
+	GameState.match_director = self
 	# Test hook: integration tests shorten the match (--match-seconds=N).
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--match-seconds="):
 			_match_duration = float(arg.trim_prefix("--match-seconds="))
 
 
+func _exit_tree() -> void:
+	if GameState.match_director == self:
+		GameState.match_director = null
+
+
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or GameState.phase != GameState.Phase.PLAYING:
 		return
-
-	_check_tags()
-
 	if GameState.match_running:
 		var it := GameState.it_peer
 		if GameState.players.has(it):
@@ -43,28 +52,26 @@ func _physics_process(delta: float) -> void:
 			_end_match()
 
 
-func _check_tags() -> void:
-	var it_node: Player = game.get_player_node(GameState.it_peer)
-	if it_node == null:
+## A peer (or the host player locally) claims it tagged target_peer.
+func handle_claim(claimant: int, target_peer: int) -> void:
+	if GameState.phase != GameState.Phase.PLAYING:
 		return
-	var now := Time.get_ticks_msec()
-	for other in game.get_player_nodes():
-		if other.peer_id == it_node.peer_id:
-			continue
-		var in_range := it_node.global_position.distance_to(other.global_position) < GameConfig.TAG_RANGE
-		if in_range:
-			if not _colliding.has(other.peer_id):
-				_colliding[other.peer_id] = true
-				var immune: bool = other.peer_id == _immune_peer and now < _immune_until_ms
-				if not immune:
-					_transfer_tag(it_node.peer_id, other.peer_id)
-					return
-		else:
-			_colliding.erase(other.peer_id)
+	if claimant != GameState.it_peer or claimant == target_peer:
+		return
+	if not GameState.players.has(target_peer):
+		return
+	if target_peer == _immune_peer and Time.get_ticks_msec() < _immune_until_ms:
+		return
+	var a: Player = game.get_player_node(claimant)
+	var b: Player = game.get_player_node(target_peer)
+	if a == null or b == null:
+		return
+	if a.global_position.distance_to(b.global_position) > CLAIM_MAX_DISTANCE:
+		return
+	_transfer_tag(claimant, target_peer)
 
 
 func _transfer_tag(from_peer: int, to_peer: int) -> void:
-	_colliding.clear()
 	_immune_peer = from_peer  # the old "it" can't be tagged right back
 	_immune_until_ms = Time.get_ticks_msec() + int(GameConfig.TAG_IMMUNITY_SEC * 1000.0)
 	GameState.set_it.rpc(to_peer, from_peer)

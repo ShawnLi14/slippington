@@ -13,7 +13,7 @@ const TAG_RANGE := 40.0
 const TAG_IMMUNITY_SEC := 1.5
 const MATCH_DURATION_SEC := 60.0
 
-const SYNC_HZ := 30.0
+const SYNC_HZ := 60.0
 const MAX_PLAYERS := 8
 
 const PLAYER_COLORS: Array[Color] = [

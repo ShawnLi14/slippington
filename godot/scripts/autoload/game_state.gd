@@ -254,6 +254,33 @@ func do_return_to_lobby() -> void:
 	players_changed.emit()
 
 
+# --- tagging -----------------------------------------------------------------
+
+## Set by the host's MatchDirector while a match is running; it arbitrates
+## tag claims (immunity, plausibility) and owns the timer/scoring.
+var match_director: Node = null
+
+
+## Called by the local "it" player when it detects contact.
+func claim_tag_local(target_peer: int) -> void:
+	if is_host():
+		_host_handle_claim(1, target_peer)
+	else:
+		claim_tag.rpc_id(1, target_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func claim_tag(target_peer: int) -> void:
+	if not is_host():
+		return
+	_host_handle_claim(multiplayer.get_remote_sender_id(), target_peer)
+
+
+func _host_handle_claim(claimant: int, target_peer: int) -> void:
+	if match_director != null:
+		match_director.handle_claim(claimant, target_peer)
+
+
 # --- abilities ---------------------------------------------------------------
 
 ## Called by the local player right after optimistically executing an ability.

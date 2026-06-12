@@ -39,9 +39,13 @@ or play on the same LAN.
 ## Architecture (short version)
 
 - **Per-peer movement authority**: your machine simulates your own player —
-  zero input latency. Positions replicate at 30 Hz over unreliable channels;
-  remote players are interpolated puppets.
-- **Host-authoritative rules**: the hosting player's machine decides tags,
+  zero input latency. Positions replicate at 60 Hz over unreliable channels;
+  remote players render 75 ms in the past via snapshot interpolation.
+- **Tagger-side hit detection**: the "it" player's client decides when
+  contact happens (its true position vs. the puppets it sees), so tags land
+  exactly when the chaser sees them; the host validates each claim
+  (right claimant, immunity, plausible distance).
+- **Host-authoritative rules**: the hosting player's machine referees tags,
   the 60s match timer, scoring (least time as "it" wins) and validates
   ability cooldowns.
 - **Transports**: `WebRTCMultiplayerPeer` (star topology, host = peer 1) for
