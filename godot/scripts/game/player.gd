@@ -6,9 +6,14 @@ extends CharacterBody2D
 ## latest received state. Game rules (tagging, timer) live on the host.
 
 const DROP_THROUGH_TIME := 0.3
-## Remote players render this far in the past, interpolated between real
-## snapshots — smooth, with a fixed and known delay instead of a trailing lerp.
-const INTERP_DELAY := 0.05
+## Remote players render slightly in the past on the SENDER's timeline,
+## interpolated between snapshots. Packets carry the sender's physics tick,
+## so spacing is perfectly even regardless of network jitter; the render
+## delay adapts to measured jitter within these bounds.
+const PHYS_DT := 1.0 / 60.0
+const DELAY_MIN := 0.05
+const DELAY_MAX := 0.15
+const OFFSET_WINDOW_SEC := 3.0
 const MAX_EXTRAPOLATION := 0.1
 ## While "it" and touching someone, re-claim at most this often; the host
 ## rejects claims during tag immunity, so contact re-tags once it expires.
@@ -35,8 +40,16 @@ var _dash_speed := 0.0
 var _drop_through_left := 0.0
 var _cooldown_until_ms := 0
 
-# Puppet interpolation state: [{t, pos, vel}] in receiver-clock seconds
+# Puppet stream state. Snapshots are [{t, pos, vel}] on the SENDER timeline
+# (t = sender physics tick × PHYS_DT); _stream_offset maps sender time to
+# local clock (sliding-window minimum of arrival − sender_t, the classic
+# clock-sync trick — the minimum isolates clock difference + best-case
+# transit, and the window range above it measures jitter).
 var _snapshots: Array = []
+var _last_seq := -1
+var _offset_window: Array = []  # [{at: local sec, off: sec}]
+var _stream_offset := 0.0
+var _interp_delay := DELAY_MIN
 var _teleport_count := 0
 var _seen_teleport_count := 0
 var _last_claim_ms := 0
@@ -105,13 +118,18 @@ func _physics_process(delta: float) -> void:
 		# scene on the phase change and late packets would target dead nodes.
 		if _sync_accumulator >= 1.0 / GameConfig.SYNC_HZ and GameState.phase == GameState.Phase.PLAYING:
 			_sync_accumulator = 0.0
-			sync_state.rpc(global_position, velocity, facing_right, anim_state, _teleport_count)
-	else:
-		_puppet_interpolate(delta)
+			sync_state.rpc(Engine.get_physics_frames(), global_position, velocity, facing_right, anim_state, _teleport_count)
 
 	if is_it() != _was_it:
 		_was_it = is_it()
 		queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	# Puppets interpolate per RENDERED frame (not per physics tick) so they
+	# stay smooth on high-refresh displays; the timeline is continuous.
+	if not is_multiplayer_authority():
+		_puppet_interpolate()
 
 
 func _authority_physics(delta: float) -> void:
@@ -173,10 +191,11 @@ func _authority_physics(delta: float) -> void:
 		queue_redraw()
 
 
-func _puppet_interpolate(_delta: float) -> void:
+func _puppet_interpolate() -> void:
 	if _snapshots.is_empty():
 		return
-	var render_t := Time.get_ticks_msec() / 1000.0 - INTERP_DELAY
+	# Estimated newest-available sender time, minus the adaptive delay.
+	var render_t := Time.get_ticks_msec() / 1000.0 - _stream_offset - _interp_delay
 	var prev: Dictionary
 	var next: Dictionary
 	for s in _snapshots:
@@ -200,16 +219,43 @@ func _puppet_interpolate(_delta: float) -> void:
 	global_position = target
 
 
+## The delay this client is currently rendering this player at — sent with
+## tag claims so the host's lag-compensation rewind matches reality.
+func get_interp_delay() -> float:
+	return _interp_delay
+
+
 @rpc("authority", "call_remote", "unreliable")
-func sync_state(pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int) -> void:
+func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int) -> void:
 	if multiplayer.is_server():
 		_record_history(pos)
+	# Unreliable channels reorder: a late stale packet must not rewind the
+	# timeline (this was a visible source of puppet twitch).
+	if tick <= _last_seq:
+		return
+	_last_seq = tick
+
+	var now := Time.get_ticks_msec() / 1000.0
+	var sender_t := float(tick) * PHYS_DT
+	_offset_window.append({"at": now, "off": now - sender_t})
+	while not _offset_window.is_empty() and _offset_window[0]["at"] < now - OFFSET_WINDOW_SEC:
+		_offset_window.pop_front()
+	var mn := INF
+	var mx := -INF
+	for s in _offset_window:
+		mn = minf(mn, s["off"])
+		mx = maxf(mx, s["off"])
+	_stream_offset = mn
+	# Window spread = arrival jitter; render far enough behind to absorb it.
+	var target_delay: float = clampf((mx - mn) * 1.5 + 0.016, DELAY_MIN, DELAY_MAX)
+	_interp_delay = lerpf(_interp_delay, target_delay, 0.05)
+
 	if teleports != _seen_teleport_count:
 		_seen_teleport_count = teleports
 		_snapshots.clear()  # blink/teleport: snap, don't glide through the gap
 		global_position = pos
-	_snapshots.append({"t": Time.get_ticks_msec() / 1000.0, "pos": pos, "vel": vel})
-	while _snapshots.size() > 30:
+	_snapshots.append({"t": sender_t, "pos": pos, "vel": vel})
+	while _snapshots.size() > 40:
 		_snapshots.pop_front()
 	if p_facing != facing_right or p_anim != anim_state:
 		facing_right = p_facing
@@ -235,7 +281,7 @@ func _check_tagging() -> void:
 		if absf(other.global_position.x - global_position.x) < CLAIM_CONTACT_SIZE \
 				and absf(other.global_position.y - global_position.y) < CLAIM_CONTACT_SIZE:
 			_last_claim_ms = now
-			GameState.claim_tag_local(other.peer_id, global_position)
+			GameState.claim_tag_local(other.peer_id, global_position, other.get_interp_delay())
 			return
 
 

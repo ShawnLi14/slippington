@@ -261,24 +261,25 @@ func do_return_to_lobby() -> void:
 var match_director: Node = null
 
 
-## Called by the local "it" player when it detects contact.
-func claim_tag_local(target_peer: int, my_pos: Vector2) -> void:
+## Called by the local "it" player when it detects contact. interp_delay is
+## the delay this client is rendering the TARGET at, for lag compensation.
+func claim_tag_local(target_peer: int, my_pos: Vector2, interp_delay: float) -> void:
 	if is_host():
-		_host_handle_claim(1, target_peer, my_pos)
+		_host_handle_claim(1, target_peer, my_pos, interp_delay)
 	else:
-		claim_tag.rpc_id(1, target_peer, my_pos)
+		claim_tag.rpc_id(1, target_peer, my_pos, interp_delay)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func claim_tag(target_peer: int, claimant_pos: Vector2) -> void:
+func claim_tag(target_peer: int, claimant_pos: Vector2, interp_delay: float) -> void:
 	if not is_host():
 		return
-	_host_handle_claim(multiplayer.get_remote_sender_id(), target_peer, claimant_pos)
+	_host_handle_claim(multiplayer.get_remote_sender_id(), target_peer, claimant_pos, interp_delay)
 
 
-func _host_handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2) -> void:
+func _host_handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2, interp_delay: float) -> void:
 	if match_director != null:
-		match_director.handle_claim(claimant, target_peer, claimant_pos)
+		match_director.handle_claim(claimant, target_peer, claimant_pos, interp_delay)
 
 
 # --- RTT measurement (host pings peers; used for lag-compensated claims) ------

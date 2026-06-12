@@ -63,9 +63,10 @@ func _physics_process(delta: float) -> void:
 
 
 ## A peer (or the host player locally) claims it tagged target_peer at
-## claimant_pos. Validated with bounded lag compensation: was the target
-## actually within contact range of that position, on the claimant's screen?
-func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2) -> void:
+## claimant_pos while rendering the target interp_delay in the past.
+## Validated with bounded lag compensation: was the target actually within
+## contact range of that position, on the claimant's screen?
+func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2, interp_delay: float) -> void:
 	if GameState.phase != GameState.Phase.PLAYING:
 		return
 	if claimant != GameState.it_peer or claimant == target_peer:
@@ -83,8 +84,13 @@ func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2) -> voi
 		return
 	# Rewind the target to the moment the claimant saw: its position packets
 	# took ~RTT/2 each way through the host relay plus the claim's own
-	# transit, i.e. one full claimant RTT, plus the render interpolation lag.
-	var rewind: float = minf(GameState.get_peer_rtt(claimant) + Player.INTERP_DELAY, MAX_REWIND)
+	# transit, i.e. one full claimant RTT, plus the claimant's actual render
+	# delay for this target (adaptive, so it's sent with the claim; clamped
+	# to its legal range as an anti-garbage measure).
+	var rewind: float = minf(
+		GameState.get_peer_rtt(claimant) + clampf(interp_delay, Player.DELAY_MIN, Player.DELAY_MAX),
+		MAX_REWIND
+	)
 	var target_then: Vector2 = b.position_at(Time.get_ticks_msec() / 1000.0 - rewind)
 	if absf(target_then.x - claimant_pos.x) < VALIDATE_CONTACT_SIZE \
 			and absf(target_then.y - claimant_pos.y) < VALIDATE_CONTACT_SIZE:
