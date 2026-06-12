@@ -31,7 +31,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if level_y >= GameConfig.MAP_HEIGHT + 60.0:
+	# Don't draw when the surface is at/below the map bottom — the wavy top
+	# edge would cross the bottom edge and the polygon fails triangulation.
+	if level_y >= GameConfig.MAP_HEIGHT - 12.0:
 		return
 	var w := float(GameConfig.MAP_WIDTH)
 	var bottom := float(GameConfig.MAP_HEIGHT)
@@ -40,7 +42,7 @@ func _draw() -> void:
 	var steps := 48
 	for i in steps + 1:
 		var x := w * float(i) / float(steps)
-		pts.append(Vector2(x, level_y + sin(_wave * 2.2 + x * 0.011) * 7.0))
+		pts.append(Vector2(x, minf(level_y + sin(_wave * 2.2 + x * 0.011) * 7.0, bottom - 2.0)))
 	pts.append(Vector2(w, bottom))
 	pts.append(Vector2(0, bottom))
 	draw_colored_polygon(pts, Color(0.78, 0.92, 0.97, 0.82))
