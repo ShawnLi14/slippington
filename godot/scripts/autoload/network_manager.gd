@@ -11,7 +11,7 @@ signal hosted_online(code: String)
 signal joiner_progress(text: String)
 
 const DEFAULT_PORT := 7777
-const DEFAULT_SIGNALING_URL := "ws://127.0.0.1:9080"
+const DEFAULT_SIGNALING_URL := "wss://slippington-signaling.fly.dev"
 const DEFAULT_ICE_SERVERS := [
 	{"urls": ["stun:stun.l.google.com:19302"]},
 	{"urls": ["stun:stun1.l.google.com:19302"]},

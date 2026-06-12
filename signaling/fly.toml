@@ -1,0 +1,20 @@
+# Fly.io config for the Slippington signaling server.
+# Deploy: flyctl deploy   (from this folder, after flyctl auth login)
+# The game then connects to wss://<app-name>.fly.dev — Fly terminates TLS
+# on 443 and forwards to the internal port.
+
+app = "slippington-signaling"
+primary_region = "ewr"  # Newark — close to the US east coast
+
+[http_service]
+  internal_port = 9080
+  force_https = true
+  # Scale to zero when idle: costs ~nothing, and the Fly proxy auto-starts
+  # the machine on the first incoming connection (~1s cold start).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

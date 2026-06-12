@@ -24,10 +24,11 @@ launch the binary twice and use Direct Connect with IP `127.0.0.1`.
 
 ## Playing online (join codes)
 
-1. Run the signaling server somewhere reachable (see `../signaling/README.md`).
-   For a quick local test: `cd ../signaling && npm start` (listens on :9080).
-2. In the menu, set the signaling server URL (defaults to `ws://127.0.0.1:9080`),
-   click **CREATE GAME** and share the 5-letter code.
+1. The game points at the deployed signaling server by default
+   (`wss://slippington-signaling.fly.dev`). For local testing you can
+   override the URL in the menu (`cd ../signaling && npm start` runs one
+   on `ws://127.0.0.1:9080`).
+2. Click **CREATE GAME** and share the 5-letter code.
 3. Friends enter the code and click **JOIN**. Game traffic flows directly
    between players (the signaling server only brokers the handshake).
 

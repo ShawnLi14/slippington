@@ -12,7 +12,13 @@ npm install
 npm start          # listens on ws://0.0.0.0:9080 (PORT env to change)
 ```
 
-## Deploy (free tier friendly)
+## Deploy
+
+**Live at `wss://slippington-signaling.fly.dev`** (Fly.io app
+`slippington-signaling`, single auto-stop machine in ewr — redeploy with
+`flyctl deploy` from this folder). IMPORTANT: keep it at exactly 1 machine
+(`flyctl scale count 1`) — rooms are in-memory, so two machines would split
+hosts and joiners into different processes.
 
 Any Node host works — Fly.io, Railway, a $0 VPS. One process, ~30 MB RAM.
 
