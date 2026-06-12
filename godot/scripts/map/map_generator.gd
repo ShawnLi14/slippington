@@ -22,13 +22,13 @@ const ICE_CHANCE := 0.15
 ## platforms fill everything above it.
 const LANDMARK_TOP := 640.0
 
-const LANDMARKS := ["tower", "pocket", "ice_rink", "spring_yard"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard"]
 
 ## Widest half-extent of each landmark's platforms, used to keep the whole
 ## structure GameConfig.PLATFORM_GAP clear of the map border and of the
 ## neighboring column's landmark.
 const LANDMARK_HALF := {
-	"tower": 131.0,        # 230/2 + wall
+	"scaffold": 185.0,     # 220/2 + 60 zigzag offset + 15 jitter
 	"pocket": 170.0,
 	"ice_rink": 220.0,     # second slab: w2/2 (160) + 60 placement jitter
 	"spring_yard": 100.0,
@@ -242,8 +242,8 @@ static func generate(seed_string: String) -> Dictionary:
 
 static func _build_landmark(kind: String, cx: float, ground_y: float, rng: SeededRng) -> Dictionary:
 	match kind:
-		"tower":
-			return _tower(cx, rng)
+		"scaffold":
+			return _scaffold(cx, rng)
 		"pocket":
 			return _pocket(cx, ground_y)
 		"ice_rink":
@@ -253,22 +253,20 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 	return {"platforms": [], "objects": []}
 
 
-## A climbable tower with walls alternating sides between levels: straight
-## horizontal runs are blocked, so chases have to weave.
-static func _tower(cx: float, rng: SeededRng) -> Dictionary:
+## A zigzag scaffold: stacked platforms with alternating horizontal offsets.
+## Every floor below the crown is passthrough — you can drop OR jump through
+## it, so nothing inside can corner you (the old walled tower turned each
+## shelf into a dead-end cubby). Chases here are vertical mixups: fake the
+## drop, take the jump. Only the solid crown demands an edge approach.
+static func _scaffold(cx: float, rng: SeededRng) -> Dictionary:
 	var plats: Array[Dictionary] = []
-	var w := 230.0
+	var w := 220.0
 	var levels := [960.0, 860.0, 760.0, 660.0]
-	for y in levels:
-		plats.append({"rect": Rect2(cx - w / 2.0, y, w, PLATFORM_HEIGHT), "type": "solid"})
-	for i in range(levels.size() - 1):
-		var left := i % 2 == 0 if rng.next() < 0.5 else i % 2 == 1
-		var wall_x := (cx - w / 2.0 - WALL_WIDTH) if left else (cx + w / 2.0)
-		plats.append({
-			"rect": Rect2(wall_x, levels[i + 1] + PLATFORM_HEIGHT, WALL_WIDTH,
-				levels[i] - levels[i + 1] - PLATFORM_HEIGHT),
-			"type": "wall",
-		})
+	var side := 1.0 if rng.next() < 0.5 else -1.0
+	for i in levels.size():
+		var off := side * (60.0 if i % 2 == 0 else -60.0) + rng.next_float(-15.0, 15.0)
+		var p_type := "solid" if i == levels.size() - 1 else "passthrough"
+		plats.append({"rect": Rect2(cx + off - w / 2.0, levels[i], w, PLATFORM_HEIGHT), "type": p_type})
 	return {"platforms": plats, "objects": []}
 
 
