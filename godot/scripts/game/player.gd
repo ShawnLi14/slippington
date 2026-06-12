@@ -38,6 +38,7 @@ var hitstop_left := 0.0
 var dash_left := 0.0
 var _dash_speed := 0.0
 var _drop_through_left := 0.0
+var _portal_cooldown_left := 0.0
 var _cooldown_until_ms := 0
 
 # Puppet stream state. Snapshots are [{t, pos, vel}] on the SENDER timeline
@@ -116,6 +117,7 @@ func _physics_process(delta: float) -> void:
 	stun_left = maxf(0.0, stun_left - delta)
 	hitstop_left = maxf(0.0, hitstop_left - delta)
 	dash_left = maxf(0.0, dash_left - delta)
+	_portal_cooldown_left = maxf(0.0, _portal_cooldown_left - delta)
 	_drop_through_left = maxf(0.0, _drop_through_left - delta)
 	collision_mask = 1 if _drop_through_left > 0.0 else (1 | 2)
 
@@ -355,6 +357,15 @@ func _standing_on_ice() -> bool:
 func apply_spring(launch_velocity: float) -> void:
 	velocity.y = launch_velocity
 	dash_left = 0.0
+
+
+## Step through a portal (owning peer only); cooldown stops the exit
+## portal from bouncing you straight back.
+func try_portal(dest: Vector2) -> void:
+	if _portal_cooldown_left > 0.0:
+		return
+	_portal_cooldown_left = 2.0
+	teleport_to(dest)
 
 
 func start_dash(speed: float, duration: float) -> void:

@@ -23,6 +23,8 @@ func _ready() -> void:
 		match obj["type"]:
 			"spring":
 				add_child(SpringPad.create(obj["pos"]))
+			"portal":
+				add_child(Portal.create(obj["pos"], obj["dest"]))
 
 	_spawn_players()
 

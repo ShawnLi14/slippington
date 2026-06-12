@@ -140,6 +140,41 @@ static func generate(seed_string: String) -> Dictionary:
 				rect.position.x + rect.size.x * rng.next_float(0.25, 0.75),
 				rect.position.y - 7.0)})
 
+	# 1-2 connector platforms patrol horizontally: routes that come and go.
+	var movers := 0
+	for p in platforms:
+		if movers >= 2:
+			break
+		var rect: Rect2 = p["rect"]
+		if p["type"] == "solid" and not p.has("move") \
+				and rect.size.x >= 140.0 and rect.size.x <= 220.0 \
+				and rect.position.y < LANDMARK_TOP and rng.next() < 0.35:
+			p["move"] = {
+				"axis": "x",
+				"amplitude": rng.next_float(110.0, 180.0),
+				"period": rng.next_float(6.0, 9.0),
+				"phase": rng.next_float(0.0, 1.0),
+			}
+			movers += 1
+
+	# A portal pair linking the far-left floor to a high perch on the right
+	# half (or vice versa) — the cross-map escape hatch.
+	var flip := rng.next() < 0.5
+	var high_candidates: Array = []
+	for p in platforms:
+		var rect: Rect2 = p["rect"]
+		var on_far_half := rect.position.x > width * 0.55 if not flip else rect.position.x + rect.size.x < width * 0.45
+		if p["type"] == "solid" and not p.has("move") and rect.size.x >= 120.0 \
+				and rect.position.y < 500.0 and on_far_half:
+			high_candidates.append(p)
+	if not high_candidates.is_empty():
+		var perch: Rect2 = high_candidates[rng.next_int(0, high_candidates.size() - 1)]["rect"]
+		var floor_x := 70.0 if not flip else float(width) - 70.0
+		objects.append({"type": "portal", "pos": Vector2(floor_x, ground_y - 36.0),
+			"dest": Vector2(perch.position.x + perch.size.x / 2.0, perch.position.y - 40.0)})
+		objects.append({"type": "portal", "pos": Vector2(perch.position.x + perch.size.x / 2.0, perch.position.y - 36.0),
+			"dest": Vector2(floor_x, ground_y - 40.0)})
+
 	# --- spawn points (lowest wide platforms, ground guaranteed) ------------
 	var sorted := platforms.duplicate()
 	sorted.sort_custom(func(a, b):
@@ -265,9 +300,15 @@ static func describe(map_data: Dictionary) -> String:
 		map_data["seed"], map_data["platforms"].size(), map_data.get("objects", []).size()])
 	for p in map_data["platforms"]:
 		var r: Rect2 = p["rect"]
-		lines.append("%s %.0f,%.0f %dx%d" % [p["type"], r.position.x, r.position.y, int(r.size.x), int(r.size.y)])
+		var line := "%s %.0f,%.0f %dx%d" % [p["type"], r.position.x, r.position.y, int(r.size.x), int(r.size.y)]
+		if p.has("move"):
+			line += " move(%s a=%.0f T=%.1f ph=%.2f)" % [p["move"]["axis"], p["move"]["amplitude"], p["move"]["period"], p["move"]["phase"]]
+		lines.append(line)
 	for o in map_data.get("objects", []):
-		lines.append("%s %.0f,%.0f" % [o["type"], o["pos"].x, o["pos"].y])
+		var line := "%s %.0f,%.0f" % [o["type"], o["pos"].x, o["pos"].y]
+		if o.has("dest"):
+			line += " -> %.0f,%.0f" % [o["dest"].x, o["dest"].y]
+		lines.append(line)
 	for s in map_data["spawn_points"]:
 		lines.append("spawn %.0f,%.0f" % [s.x, s.y])
 	return "\n".join(lines)

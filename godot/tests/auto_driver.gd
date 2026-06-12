@@ -66,6 +66,7 @@ func _ready() -> void:
 		"session": false,
 		"roster_2_players": false,
 		"playing_phase": false,
+		"stood_on_floor": false,  # catches a broken/missing map
 		"it_changed": false,
 		"timer_started": false,
 		"ability_fired": false,
@@ -245,6 +246,10 @@ func _physics_process(delta: float) -> void:
 	var game := get_tree().root.get_node_or_null("Main/Screen") as Game
 	if game == null:
 		return
+
+	var floor_me := game.local_player()
+	if floor_me != null and floor_me.is_on_floor():
+		_pass("stood_on_floor")
 
 	if bot_style == "smart":
 		_smart_move(game, delta)

@@ -1,23 +1,37 @@
 class_name PlatformBody
-extends StaticBody2D
+extends AnimatableBody2D
 ## A map platform built from generator data. Solid platforms live on
 ## collision layer 1; passthrough platforms on layer 2 with one-way
 ## collision so players can jump up through them (and drop through
 ## with Down+Jump, which briefly masks layer 2 off the player).
+##
+## AnimatableBody2D (not StaticBody2D) so platforms with "move" data carry
+## their riders; movement phase derives from GameState.world_clock, which
+## every peer resets on the same start_game RPC — no extra sync needed.
 
 var rect := Rect2()
 var type := "solid"
+var move_data: Dictionary = {}  # {axis, amplitude, period, phase} or empty
+
+var _base_pos := Vector2.ZERO
 
 
 static func create(data: Dictionary) -> PlatformBody:
 	var p := PlatformBody.new()
 	p.rect = data["rect"]
 	p.type = data["type"]
+	p.move_data = data.get("move", {})
 	return p
 
 
 func _ready() -> void:
+	# sync_to_physics MUST be configured before touching position: while it
+	# is enabled (the AnimatableBody2D default), transform writes outside
+	# _physics_process are discarded and the body snaps to the origin.
+	sync_to_physics = not move_data.is_empty()
+	set_physics_process(not move_data.is_empty())
 	position = rect.position + rect.size / 2.0
+	_base_pos = position
 	var shape := CollisionShape2D.new()
 	var rect_shape := RectangleShape2D.new()
 	rect_shape.size = rect.size
@@ -29,6 +43,15 @@ func _ready() -> void:
 	else:
 		collision_layer = 1
 	add_child(shape)
+
+
+func _physics_process(_delta: float) -> void:
+	var t: float = GameState.world_clock / move_data["period"] + move_data["phase"]
+	var offset: float = move_data["amplitude"] * sin(TAU * t)
+	if move_data["axis"] == "y":
+		position = _base_pos + Vector2(0, offset)
+	else:
+		position = _base_pos + Vector2(offset, 0)
 
 
 func _draw() -> void:

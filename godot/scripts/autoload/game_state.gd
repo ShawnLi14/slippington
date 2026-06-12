@@ -33,6 +33,11 @@ var map_seed := ""
 var match_running := false
 var match_remaining := 0.0
 var results: Array = []
+## Seconds since the current game started; drives moving-platform phase.
+## Reset by the same start_game RPC on every peer, so clients differ only
+## by network latency (~a few px of platform offset — fine, collision is
+## evaluated locally per player anyway).
+var world_clock := 0.0
 
 var _host_ability_last_use: Dictionary = {}  # peer_id -> {ability_id: msec}
 var host_ability_use_counts: Dictionary = {}  # peer_id -> int (telemetry)
@@ -41,6 +46,11 @@ var _next_color := 0
 
 func _ready() -> void:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _physics_process(delta: float) -> void:
+	if phase == Phase.PLAYING:
+		world_clock += delta
 
 
 func is_host() -> bool:
@@ -207,6 +217,7 @@ func start_game(seed_str: String, roster: Dictionary) -> void:
 	match_running = false
 	match_remaining = GameConfig.MATCH_DURATION_SEC
 	results.clear()
+	world_clock = 0.0
 	it_peer = -1
 	for id in players:
 		if players[id]["is_it"]:
