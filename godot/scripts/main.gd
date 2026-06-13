@@ -93,7 +93,7 @@ func _build_host_warning() -> void:
 	add_child(_host_warning)
 
 	var panel := PanelContainer.new()
-	UiTheme.anchor_rect(panel, Control.PRESET_CENTER_TOP, Rect2(-350, 24, 700, 120))
+	UiTheme.anchor_rect(panel, Control.PRESET_CENTER, Rect2(-350, -60, 700, 120))
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.07, 0.06, 0.96)
