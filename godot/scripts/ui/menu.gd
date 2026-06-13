@@ -14,9 +14,6 @@ var _class_cards: Dictionary = {}
 var _selected_class := "slipper"
 var _buttons: Array[Button] = []
 var _advanced_panel: PanelContainer
-var _practice_bot_class := "anchor"
-var _practice_diff := "medium"
-var _diff_buttons: Dictionary = {}
 
 const CLASS_CARD_COLORS := {
 	"slipper": Color("#4ecdc4"),
@@ -119,33 +116,6 @@ func _ready() -> void:
 	join_row.add_child(join_btn)
 	center.add_child(join_row)
 	_buttons.append(join_btn)
-
-	# --- practice: pick the chaser's class and skill, then go ----------------
-	var practice_row := HBoxContainer.new()
-	practice_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	practice_row.add_theme_constant_override("separation", 10)
-	practice_row.add_child(_dim_label("bot"))
-	var bot_pick := OptionButton.new()
-	bot_pick.custom_minimum_size = Vector2(120, 34)
-	var classes := ClassRegistry.all()
-	for i in classes.size():
-		bot_pick.add_item(classes[i].display_name)
-		bot_pick.set_item_metadata(i, classes[i].id)
-		if classes[i].id == _practice_bot_class:
-			bot_pick.select(i)
-	bot_pick.item_selected.connect(func(idx: int): _practice_bot_class = bot_pick.get_item_metadata(idx))
-	practice_row.add_child(bot_pick)
-	practice_row.add_child(_dim_label("skill"))
-	for level in BotDifficulty.levels():
-		var b := UiTheme.button(level.to_upper())
-		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(76, 34)
-		b.add_theme_font_size_override("font_size", 13)
-		b.button_pressed = level == _practice_diff
-		b.pressed.connect(_on_pick_difficulty.bind(level))
-		_diff_buttons[level] = b
-		practice_row.add_child(b)
-	center.add_child(practice_row)
 
 	var practice_btn := UiTheme.button("PRACTICE VS BOT")
 	practice_btn.custom_minimum_size = Vector2(220, 40)
@@ -307,26 +277,11 @@ func _on_host_online() -> void:
 	NetworkManager.host_online()
 
 
-func _on_pick_difficulty(level: String) -> void:
-	_practice_diff = level
-	for lv in _diff_buttons:
-		_diff_buttons[lv].button_pressed = lv == level
-
-
-func _dim_label(text: String) -> Label:
-	var l := UiTheme.label(text, 14, Color(1, 1, 1, 0.6))
-	l.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.12, 0.8))
-	l.add_theme_constant_override("outline_size", 4)
-	return l
-
-
 func _on_practice() -> void:
 	GameState.local_name = _name_edit.text.strip_edges()
 	if GameState.local_name == "":
 		GameState.local_name = "You"
 	GameState.local_class_id = _selected_class
-	GameState.practice_bot_class = _practice_bot_class
-	GameState.practice_difficulty = _practice_diff
 	NetworkManager.leave()
 	GameState.start_practice()
 

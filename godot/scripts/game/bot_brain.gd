@@ -1,40 +1,38 @@
 class_name BotBrain
 extends Node
-## Drives its parent Player through the navigation graph: paths to the
-## nearest other player and chases — climbing structures, taking springs and
-## portals, dropping through one-way platforms as the route demands. The
-## practice bot is "it" forever, so chasing is its whole job (role behaviour
-## and difficulty tuning build on top of this in later phases).
-##
-## move_dir + poll_jump() + want_drop mirror exactly the inputs Player reads
-## from a human, so the pawn can't tell it's being driven by AI.
+## Drives its parent Player like a basic chaser: run at the nearest other
+## player, hop when they're above or occasionally to clear terrain. Used by
+## practice mode (the bot never stops, never uses abilities).
 
 var move_dir := 0.0
-var want_drop := false
-var want_ability := false
 
 var _jump_queued := false
-var _nav: BotNavigator
-var _policy := BotPolicy.new()
+var _jump_cooldown := 0.0
 
 
 func _physics_process(delta: float) -> void:
+	_jump_cooldown = maxf(0.0, _jump_cooldown - delta)
 	var me := get_parent() as Player
 	if me == null:
 		return
-	var nav := _navigator(me)
-	# BotPolicy chooses the goal by role (chase the prey / flee the hunter);
-	# the navigator turns that into movement. The practice bot is always "it",
-	# so in practice this resolves to a cut-off chase, but the logic is general.
-	var players := get_tree().get_nodes_in_group("players")
-	var diff := BotDifficulty.params(GameState.practice_difficulty)
-	var decision := _policy.tick(me, players, nav.graph, diff, delta)
-	var cmd := nav.navigate(me, decision["goal"], delta)
-	move_dir = cmd["move_dir"]
-	want_drop = cmd["drop"]
-	want_ability = decision["ability"]
-	if cmd["jump"]:
+	var target: Player = null
+	var nearest := INF
+	for p in get_tree().get_nodes_in_group("players"):
+		if p == me:
+			continue
+		var d: float = p.global_position.distance_to(me.global_position)
+		if d < nearest:
+			nearest = d
+			target = p
+	if target == null:
+		move_dir = 0.0
+		return
+	var dx := target.global_position.x - me.global_position.x
+	move_dir = 0.0 if absf(dx) < 8.0 else signf(dx)
+	if me.is_on_floor() and _jump_cooldown <= 0.0 \
+			and (target.global_position.y < me.global_position.y - 60.0 or randf() < 0.008):
 		_jump_queued = true
+		_jump_cooldown = 0.7
 
 
 ## One-shot: true once per queued jump (mirrors is_action_just_pressed).
@@ -42,9 +40,3 @@ func poll_jump() -> bool:
 	var j := _jump_queued
 	_jump_queued = false
 	return j
-
-
-func _navigator(me: Player) -> BotNavigator:
-	if _nav == null:
-		_nav = BotNavigator.new((me.get_parent() as Game).get_nav_graph())
-	return _nav

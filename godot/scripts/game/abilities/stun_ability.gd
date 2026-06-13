@@ -24,7 +24,7 @@ func execute(player: Node) -> bool:
 		if other == player or not other.is_in_group("players"):
 			continue
 		if other.global_position.distance_to(player.global_position) <= RADIUS:
-			GameState.send_stun(other.peer_id, STUN_DURATION)
+			GameState.rpc_id(other.peer_id, "apply_stun", STUN_DURATION)
 	return true
 
 
