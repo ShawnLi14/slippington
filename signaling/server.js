@@ -15,11 +15,64 @@ const ROOM_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 // Unambiguous code alphabet: A-Z minus I/O, digits 2-9.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-// Handed to clients so TURN can be added later without touching the game.
-const ICE_SERVERS = [
+// --- ICE servers ------------------------------------------------------------
+// STUN is always handed out. TURN relay (for peers whose networks block
+// direct P2P) comes from either of two optional configs:
+//   Static (coturn, Metered, ...):  TURN_URLS=turn:host:3478,turns:host:5349
+//                                   TURN_USERNAME=... TURN_CREDENTIAL=...
+//   Cloudflare Realtime TURN:       CF_TURN_KEY_ID=... CF_TURN_API_TOKEN=...
+//     Credentials are minted on demand with a 24h TTL and re-minted after 6h,
+//     so clients always receive creds with >=18h of validity — comfortably
+//     longer than any game session, since a relayed game dies if its TURN
+//     credentials expire mid-match.
+// With neither set, clients get STUN-only (the pre-TURN behavior).
+const STATIC_ICE = [
   { urls: ['stun:stun.l.google.com:19302'] },
   { urls: ['stun:stun1.l.google.com:19302'] },
 ];
+if (process.env.TURN_URLS) {
+  STATIC_ICE.push({
+    urls: process.env.TURN_URLS.split(',').map((u) => u.trim()),
+    username: process.env.TURN_USERNAME || '',
+    credential: process.env.TURN_CREDENTIAL || '',
+  });
+  console.log(`static TURN configured: ${process.env.TURN_URLS}`);
+}
+
+const CF_TTL_SEC = 24 * 3600;
+const CF_REMINT_MS = 6 * 3600 * 1000;
+let cfCache = { servers: [], mintedAt: 0 };
+
+async function iceServersForClient() {
+  const servers = [...STATIC_ICE];
+  const keyId = process.env.CF_TURN_KEY_ID;
+  const token = process.env.CF_TURN_API_TOKEN;
+  if (keyId && token) {
+    try {
+      if (Date.now() - cfCache.mintedAt > CF_REMINT_MS) {
+        const resp = await fetch(
+          `https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ttl: CF_TTL_SEC }),
+          }
+        );
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        // Endpoint returns { iceServers: [...] } (older variant: a single object).
+        const minted = Array.isArray(data.iceServers) ? data.iceServers : [data.iceServers];
+        cfCache = { servers: minted, mintedAt: Date.now() };
+        console.log('minted Cloudflare TURN credentials');
+      }
+      servers.push(...cfCache.servers);
+    } catch (e) {
+      // STUN-only beats no answer: never let a TURN hiccup block a session.
+      console.log(`cloudflare TURN mint failed: ${e.message}`);
+    }
+  }
+  return servers;
+}
 
 const rooms = new Map(); // code -> { host, peers: Map<peerId, ws>, nextPeerId, lastActivity }
 
@@ -44,7 +97,7 @@ wss.on('connection', (ws) => {
   ws.roomCode = null;
   ws.peerId = null;
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let msg;
     try {
       msg = JSON.parse(raw);
@@ -65,7 +118,7 @@ wss.on('connection', (ws) => {
         });
         ws.roomCode = code;
         ws.peerId = 1;
-        send(ws, { type: 'hosted', code, peer_id: 1, ice_servers: ICE_SERVERS });
+        send(ws, { type: 'hosted', code, peer_id: 1, ice_servers: await iceServersForClient() });
         console.log(`room ${code} created`);
         break;
       }
@@ -87,7 +140,7 @@ wss.on('connection', (ws) => {
         target.lastActivity = Date.now();
         ws.roomCode = code;
         ws.peerId = peerId;
-        send(ws, { type: 'joined', peer_id: peerId, host_id: 1, ice_servers: ICE_SERVERS });
+        send(ws, { type: 'joined', peer_id: peerId, host_id: 1, ice_servers: await iceServersForClient() });
         send(target.peers.get(1), { type: 'peer_joined', peer_id: peerId });
         console.log(`peer ${peerId} joined room ${code}`);
         break;

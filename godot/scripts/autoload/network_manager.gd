@@ -144,10 +144,28 @@ func _start_signaling() -> void:
 	_signaling.connect_to(signaling_url)
 
 
+## One-line summary of an ice_servers config for the log — makes "did this
+## session even have a TURN relay available?" answerable after the fact.
+func _describe_ice(servers: Array) -> String:
+	var stun := 0
+	var turn := 0
+	for s in servers:
+		var urls = s.get("urls", [])
+		if urls is String:
+			urls = [urls]
+		for u in urls:
+			if str(u).begins_with("turn"):
+				turn += 1
+			elif str(u).begins_with("stun"):
+				stun += 1
+	return "%d STUN / %d TURN urls" % [stun, turn]
+
+
 func _on_sig_hosted(code: String, peer_id: int, ice_servers: Array) -> void:
 	join_code = code
 	if not ice_servers.is_empty():
 		_ice_servers = ice_servers
+	print("[net] ICE config: " + _describe_ice(_ice_servers))
 	_rtc_peer = WebRTCMultiplayerPeer.new()
 	_rtc_peer.create_server()
 	multiplayer.multiplayer_peer = _rtc_peer
@@ -160,6 +178,7 @@ func _on_sig_hosted(code: String, peer_id: int, ice_servers: Array) -> void:
 func _on_sig_joined(peer_id: int, host_id: int, ice_servers: Array) -> void:
 	if not ice_servers.is_empty():
 		_ice_servers = ice_servers
+	print("[net] ICE config: " + _describe_ice(_ice_servers))
 	_rtc_peer = WebRTCMultiplayerPeer.new()
 	_rtc_peer.create_client(peer_id)
 	multiplayer.multiplayer_peer = _rtc_peer
