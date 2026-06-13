@@ -49,8 +49,11 @@ func _build_sky() -> void:
 	var sky := TextureRect.new()
 	sky.texture = tex
 	sky.stretch_mode = TextureRect.STRETCH_SCALE
-	sky.position = Vector2.ZERO
-	sky.size = Vector2(MAP_W, MAP_H)
+	# Full-rect anchored (not a fixed MAP_W x MAP_H) so it covers the WHOLE
+	# visible viewport, including the area the "expand" stretch reveals beyond
+	# the 1920x1080 design rect on non-16:9 windows (e.g. most browser windows).
+	# Otherwise that uncovered strip shows the gray default clear colour.
+	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(sky)
 
 
@@ -72,8 +75,8 @@ func _build_aurora() -> void:
 	var rect := ColorRect.new()
 	rect.material = mat
 	rect.color = Color(1, 1, 1, 1)  # shader writes the real colour + alpha
-	rect.position = Vector2.ZERO
-	rect.size = Vector2(MAP_W, MAP_H)
+	# Full-rect so the aurora veil spans the whole window (see _build_sky).
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(rect)
 
 
