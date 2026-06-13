@@ -11,6 +11,7 @@ extends Node
 
 var move_dir := 0.0
 var want_drop := false
+var want_ability := false
 
 var _jump_queued := false
 var _nav: BotNavigator
@@ -25,10 +26,12 @@ func _physics_process(delta: float) -> void:
 	# BotPolicy chooses the goal by role (chase the prey / flee the hunter);
 	# the navigator turns that into movement. The practice bot is always "it",
 	# so in practice this resolves to a cut-off chase, but the logic is general.
-	var goal := _policy.decide_goal(me, get_tree().get_nodes_in_group("players"), nav.graph, delta)
+	var players := get_tree().get_nodes_in_group("players")
+	var goal := _policy.decide_goal(me, players, nav.graph, delta)
 	var cmd := nav.navigate(me, goal, delta)
 	move_dir = cmd["move_dir"]
 	want_drop = cmd["drop"]
+	want_ability = BotPolicy.should_use_ability(me, players)
 	if cmd["jump"]:
 		_jump_queued = true
 

@@ -614,14 +614,10 @@ func _smart_move(game: Game, delta: float) -> void:
 		_policy = BotPolicy.new()
 	_ability_timer += delta
 
-	var want_ability := false
 	if me.is_it():
-		var target := _nearest_prey(game, me)
-		if target == null:
+		if _nearest_prey(game, me) == null:
 			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
 			return
-		if _ability_timer > 2.0 and target.global_position.distance_to(me.global_position) < 350.0:
-			want_ability = true
 	else:
 		var hunter := game.get_player_node(GameState.it_peer)
 		if hunter == null or hunter.global_position.distance_to(me.global_position) > 520.0:
@@ -629,14 +625,12 @@ func _smart_move(game: Game, delta: float) -> void:
 			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
 			Input.action_release("ability_primary")
 			return
-		if hunter.global_position.distance_to(me.global_position) < 200.0 and _ability_timer > 1.5:
-			want_ability = true
 
 	# BotPolicy picks the goal by role; the navigator routes to it.
-	var goal := _policy.decide_goal(me, game.get_player_nodes(), _nav.graph, delta)
+	var players := game.get_player_nodes()
+	var goal := _policy.decide_goal(me, players, _nav.graph, delta)
 	_apply_cmd(_nav.navigate(me, goal, delta))
-	if want_ability:
-		_ability_timer = 0.0
+	if BotPolicy.should_use_ability(me, players):
 		Input.action_press("ability_primary")
 	else:
 		Input.action_release("ability_primary")

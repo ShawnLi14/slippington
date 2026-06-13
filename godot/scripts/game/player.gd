@@ -211,8 +211,11 @@ func _authority_physics(delta: float) -> void:
 				velocity.y = GameConfig.JUMP_VELOCITY * player_class.jump_mult
 				SoundManager.play("jump")
 
-		if bot_brain == null and Input.is_action_just_pressed("ability_primary"):
-			try_use_ability()
+		if bot_brain == null:
+			if Input.is_action_just_pressed("ability_primary"):
+				try_use_ability()
+		elif bot_brain.want_ability:
+			try_use_ability()  # cooldown is enforced inside try_use_ability
 
 	move_and_slide()
 

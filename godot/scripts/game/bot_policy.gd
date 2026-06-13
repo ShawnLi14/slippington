@@ -59,6 +59,44 @@ static func evade_goal(me_pos: Vector2, hunter_pos: Vector2, graph: Dictionary) 
 	return best
 
 
+## Should this bot fire its ability right now? Class- and role-aware, instead
+## of mashing it on cooldown. Cooldown itself is enforced by try_use_ability,
+## so this only encodes intent: when does this ability actually help?
+static func should_use_ability(me: Node, players: Array) -> bool:
+	if me.player_class == null or me.player_class.primary_ability == null:
+		return false
+	var other := _nearest_other(me, players)
+	if other == null:
+		return false
+	var dist: float = other.global_position.distance_to(me.global_position)
+	var it: bool = me.is_it()
+	match me.player_class.primary_ability.id:
+		"blink":
+			# Teleport: close the gap as hunter, bolt clear as prey.
+			return dist < 260.0 if it else dist < 180.0
+		"swap":
+			# Trade places: as hunter, snap onto prey from just out of reach;
+			# as prey, only worth it with a third player to swap toward.
+			if it:
+				return dist > 70.0 and dist < SwapAbility.RANGE
+			return players.size() > 2 and dist < 150.0
+		"stun":
+			# Freeze: only when someone's actually in the blast radius.
+			return dist < StunAbility.RADIUS - 10.0
+		"rewind":
+			# Snap to the past: an escape, so fire it cornered as prey.
+			return not it and dist < 150.0
+		"doppel":
+			# Decoy + vanish: break an active chase as prey.
+			return not it and dist < 230.0
+		"build":
+			# Conjure a ledge: an escape upward, used as prey when pressed.
+			return not it and dist < 170.0
+		"dash":
+			return dist < 300.0
+	return false
+
+
 static func _nearest_other(me: Node, players: Array) -> Node:
 	var best: Node = null
 	var nearest := INF
