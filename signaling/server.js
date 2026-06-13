@@ -43,6 +43,27 @@ const CF_TTL_SEC = 24 * 3600;
 const CF_REMINT_MS = 6 * 3600 * 1000;
 let cfCache = { servers: [], mintedAt: 0 };
 
+// The only client is Godot's webrtc-native (libjuice), which supports TURN
+// over UDP only — it logs "TURN transports TCP and TLS are not supported" and
+// floods CreatePermission errors when handed turn?transport=tcp / turns:.
+// Cloudflare advertises 6 TURN URLs (4 of them TCP/TLS); strip those so the
+// client only ever sees usable relays. (Verified separately: the UDP relay
+// allocates, permits, and forwards data end to end.) STUN urls pass through
+// untouched. The ceiling this leaves: a network that blocks UDP entirely
+// can't be rescued, since TCP/TLS relay isn't available in this stack.
+function udpOnlyTurn(servers) {
+  return servers
+    .map((s) => {
+      const urls = (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u) => {
+        if (u.startsWith('turns:')) return false; // TLS relay — unsupported
+        if (u.startsWith('turn:')) return u.includes('transport=udp');
+        return true; // stun: and anything else
+      });
+      return { ...s, urls };
+    })
+    .filter((s) => s.urls.length > 0);
+}
+
 async function iceServersForClient() {
   const servers = [...STATIC_ICE];
   const keyId = process.env.CF_TURN_KEY_ID;
@@ -71,7 +92,7 @@ async function iceServersForClient() {
       console.log(`cloudflare TURN mint failed: ${e.message}`);
     }
   }
-  return servers;
+  return udpOnlyTurn(servers);
 }
 
 const rooms = new Map(); // code -> { host, peers: Map<peerId, ws>, nextPeerId, lastActivity }

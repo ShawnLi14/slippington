@@ -20,6 +20,12 @@ const DEFAULT_ICE_SERVERS := [
 var is_host := false
 var join_code := ""
 var signaling_url := DEFAULT_SIGNALING_URL
+## Debug/test only: when true, WebRTC ignores host and server-reflexive
+## candidates and connects ONLY through the TURN relay. On a single machine
+## two peers would otherwise always pair via host candidates, so this is the
+## only way to actually exercise the relay path end to end. Set by the test
+## driver's --force-relay flag; never enabled in normal play.
+var force_relay := false
 ## How long a WebRTC connection may sit unconnected before we call it dead.
 ## A blocked network (VPN, strict NAT, UDP filtered) often leaves ICE stuck
 ## "connecting" forever instead of reporting failure — without this watchdog
@@ -195,7 +201,10 @@ func _on_sig_peer_joined(peer_id: int) -> void:
 
 func _create_rtc_connection(peer_id: int, make_offer: bool) -> void:
 	var conn := WebRTCPeerConnection.new()
-	var err := conn.initialize({"iceServers": _ice_servers})
+	var config := {"iceServers": _ice_servers}
+	if force_relay:
+		config["iceTransportPolicy"] = "relay"
+	var err := conn.initialize(config)
 	if err != OK:
 		session_failed.emit("WebRTC init failed (extension missing?)")
 		return

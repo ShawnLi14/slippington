@@ -74,6 +74,9 @@ func _ready() -> void:
 			bot_class = arg.trim_prefix("--class=")
 		elif arg.begins_with("--connect-timeout="):
 			NetworkManager.connect_timeout_sec = float(arg.trim_prefix("--connect-timeout="))
+		elif arg == "--force-relay":
+			# Exercise the TURN relay path: ignore host/reflexive candidates.
+			NetworkManager.force_relay = true
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
