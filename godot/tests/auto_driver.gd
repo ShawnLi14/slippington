@@ -28,8 +28,29 @@ var rounds_arg := 1
 var _playing_entries := 0
 var _event_shot_taken := false
 
+## Seconds a nav-test bot may take to reach one target before it's a miss.
+const NAV_TARGET_BUDGET := 10.0
+## Fraction of reachable surfaces the bot must reach from a COLD SPAWN to
+## pass. Deliberately not high: this is the hardest possible nav case —
+## planning a whole multi-hop climb from the ground with fixed-height
+## bang-bang jumps. Real chasing is far easier (the bot follows the prey one
+## hop at a time, re-planning each landing), so this is a regression guard
+## against the navigator breaking, not a measure of in-match competence.
+## Typical cold-start reach runs ~45-60%; a crater here means nav is broken.
+const NAV_PASS_FRACTION := 0.35
+
 var _jump_cooldown := 0.0
 var _ability_timer := 0.0
+var _nav: BotNavigator
+
+# nav-test (navigation soundness) state.
+var _nav_targets: Array = []
+var _nav_i := 0
+var _nav_deadline := 0.0
+var _nav_reached := 0
+var _nav_spawn := Vector2.ZERO
+var _nav_trace := -1
+var _nav_dbg_t := 0.0
 
 var _elapsed := 0.0
 var _checks: Dictionary = {}
@@ -77,6 +98,8 @@ func _ready() -> void:
 		elif arg == "--force-relay":
 			# Exercise the TURN relay path: ignore host/reflexive candidates.
 			NetworkManager.force_relay = true
+		elif arg.begins_with("--trace="):
+			_nav_trace = int(arg.trim_prefix("--trace="))
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
@@ -192,6 +215,14 @@ func _ready() -> void:
 			GameState.local_name = "You"
 			GameState.start_practice()
 			_take_screenshot(3.0)
+			return
+		"nav-test":
+			# Navigation soundness: drive a pawn through the graph to every
+			# reachable surface and assert it actually arrives. Catches maps
+			# the planner validates but real physics can't traverse.
+			timeout_sec = 160.0
+			NetworkManager.host_lan(port)
+			GameState.host_start_game(map_choice)
 			return
 		"shot-game":
 			# Solo game directly into PLAYING to capture map + HUD.
@@ -348,18 +379,27 @@ func _physics_process(delta: float) -> void:
 		return
 	_elapsed += delta
 	if _elapsed > timeout_sec:
+		if mode == "nav-test":
+			print("[nav-test] FAIL: timed out")
+			_done = true
+			get_tree().quit(1)
+			return
 		_finish()
 		return
 
 	if GameState.phase != GameState.Phase.PLAYING:
 		_release_all()
 		# After the match (or series) ends, every check should be in.
-		if GameState.phase == GameState.Phase.ENDED and _checks["match_ended"] \
+		if GameState.phase == GameState.Phase.ENDED and _checks.get("match_ended", false) \
 				and (rounds_arg == 1 or GameState.series_final):
 			_finish()
 		return
 	var game := get_tree().root.get_node_or_null("Main/Screen") as Game
 	if game == null:
+		return
+
+	if mode == "nav-test":
+		_nav_test_step(game, delta)
 		return
 
 	var floor_me := game.local_player()
@@ -487,88 +527,159 @@ func _swap_test_step(game: Game) -> void:
 		_finish()
 
 
-## Playtest bot: chase with jumps when "it"; flee, jump and panic-ability
-## when hunted. Produces realistic-ish chases for telemetry.
+## Navigation soundness: walk the pawn to every reachable surface and assert
+## arrival within a per-target budget. The pawn is Input-driven (the real
+## human path), so this validates the planner's arcs against actual physics.
+func _nav_test_step(game: Game, delta: float) -> void:
+	var me := game.local_player()
+	if me == null:
+		return
+	if _nav == null:
+		_nav = BotNavigator.new(game.get_nav_graph())
+		for idx in _nav.reachable_indices():
+			if idx != _nav.ground_index():
+				_nav_targets.append(idx)
+		# Cap the count for runtime; evenly sample if there are many surfaces.
+		if _nav_targets.size() > 12:
+			var sampled: Array = []
+			var stride: float = float(_nav_targets.size()) / 12.0
+			var f := 0.0
+			while sampled.size() < 12 and int(f) < _nav_targets.size():
+				sampled.append(_nav_targets[int(f)])
+				f += stride
+			_nav_targets = sampled
+		_nav_spawn = me.global_position
+		_nav_deadline = _elapsed + NAV_TARGET_BUDGET
+		print("[nav-test] map %s: %d reachable targets" % [GameState.map_seed, _nav_targets.size()])
+		if _nav_trace >= 0:
+			var surfs: Array = game.get_nav_graph()["surfaces"]
+			for si in surfs.size():
+				var sr: Rect2 = surfs[si]["rect"]
+				print("[surf] %d: %.0f,%.0f %.0fx%.0f thru=%s edges=%s" % [si, sr.position.x, sr.position.y,
+					sr.size.x, sr.size.y, surfs[si].get("thru", false), str(game.get_nav_graph()["edges"][si])])
+
+	if _nav_i >= _nav_targets.size():
+		_done = true
+		var total: int = _nav_targets.size()
+		var rate := float(_nav_reached) / maxf(1.0, float(total))
+		print("[nav-test] reached %d/%d targets (%.0f%%)" % [_nav_reached, total, rate * 100.0])
+		if rate >= NAV_PASS_FRACTION:
+			print("[nav-test] ALL CHECKS PASSED")
+			get_tree().quit(0)
+		else:
+			print("[nav-test] FAIL: reach rate %.0f%% below %.0f%% floor" % [rate * 100.0, NAV_PASS_FRACTION * 100.0])
+			get_tree().quit(1)
+		return
+
+	var tgt: int = _nav_targets[_nav_i]
+	var cmd := _nav.navigate(me, _nav.surface_goal(tgt), delta)
+	_apply_cmd(cmd)
+	if tgt == _nav_trace and _elapsed - _nav_dbg_t > 0.4:
+		_nav_dbg_t = _elapsed
+		print("[dbg] t%d pos=%.0f,%.0f floor=%s loc=%d md=%.0f jp=%s %s" % [
+			tgt, me.global_position.x, me.global_position.y, me.is_on_floor(),
+			_nav.localize(me.global_position), cmd["move_dir"], cmd["jump"], _nav.debug_state()])
+	if me.is_on_floor() and _nav.localize(me.global_position) == tgt:
+		_nav_reached += 1
+		print("[nav-test]   reached surface %d (%d/%d)" % [tgt, _nav_reached, _nav_targets.size()])
+		_nav_advance(me)
+	elif _elapsed > _nav_deadline:
+		var r: Rect2 = game.get_nav_graph()["surfaces"][tgt]["rect"]
+		print("[nav-test]   MISS surface %d at %.0f,%.0f" % [tgt, r.position.x, r.position.y])
+		_nav_advance(me)
+
+
+## Move to the next target: each is an independent reach-from-spawn check, so
+## reset the pawn to the spawn point and clear the navigator's path state.
+func _nav_advance(me: Player) -> void:
+	_nav_i += 1
+	_nav_deadline = _elapsed + NAV_TARGET_BUDGET
+	me.global_position = _nav_spawn
+	me.velocity = Vector2.ZERO
+	_nav.reset()
+	_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
+
+
+## Playtest bot: navigate the graph to chase when "it" and to flee when
+## hunted, popping an ability when in range. Produces realistic chases (over
+## real terrain — walls, springs, ladders) for telemetry.
 func _smart_move(game: Game, delta: float) -> void:
 	var me := game.local_player()
 	if me == null:
 		return
-	_jump_cooldown = maxf(0.0, _jump_cooldown - delta)
+	if _nav == null:
+		_nav = BotNavigator.new(game.get_nav_graph())
 	_ability_timer += delta
-	Input.action_release("jump")
 
-	var it_id := GameState.it_peer
+	var goal: Vector2
+	var want_ability := false
 	if me.is_it():
-		var target: Player = null
-		var nearest := INF
-		for p in game.get_player_nodes():
-			if p.peer_id == me.peer_id:
-				continue
-			var d: float = p.global_position.distance_to(me.global_position)
-			if d < nearest:
-				nearest = d
-				target = p
+		var target := _nearest_prey(game, me)
 		if target == null:
+			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
 			return
-		_run_toward(target.global_position.x, me)
-		# Jump if prey is above us, or periodically to clear platforms.
-		if me.is_on_floor() and _jump_cooldown <= 0.0 \
-				and (target.global_position.y < me.global_position.y - 60.0 or randf() < 0.01):
-			Input.action_press("jump")
-			_jump_cooldown = 0.6
-		if _ability_timer > 2.0 and nearest < 350.0:
-			_ability_timer = 0.0
-			Input.action_press("ability_primary")
-		else:
-			Input.action_release("ability_primary")
+		goal = target.global_position
+		if _ability_timer > 2.0 and target.global_position.distance_to(me.global_position) < 350.0:
+			want_ability = true
 	else:
-		var hunter := game.get_player_node(it_id)
-		Input.action_release("ability_primary")
-		if hunter == null:
-			_stop(me)
+		var hunter := game.get_player_node(GameState.it_peer)
+		if hunter == null or hunter.global_position.distance_to(me.global_position) > 520.0:
+			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
+			Input.action_release("ability_primary")
 			return
 		var dist: float = hunter.global_position.distance_to(me.global_position)
-		if dist < 520.0:
-			# Run away; hop when cornered or when the hunter is close.
-			var flee_dir: float = signf(me.global_position.x - hunter.global_position.x)
-			if flee_dir == 0.0:
-				flee_dir = 1.0
-			var cornered: bool = (me.global_position.x < 120.0 and flee_dir < 0.0) \
-				or (me.global_position.x > GameConfig.MAP_WIDTH - 120.0 and flee_dir > 0.0)
-			if cornered:
-				flee_dir = -flee_dir
-			_run_dir(flee_dir, me)
-			if me.is_on_floor() and _jump_cooldown <= 0.0 and (dist < 180.0 or cornered or randf() < 0.02):
-				Input.action_press("jump")
-				_jump_cooldown = 0.5
-			if dist < 200.0 and _ability_timer > 1.5:
-				_ability_timer = 0.0
-				Input.action_press("ability_primary")
-		else:
-			_stop(me)
+		# Flee to a far point on the side away from the hunter; nav routes it.
+		var flee_dir: float = signf(me.global_position.x - hunter.global_position.x)
+		if flee_dir == 0.0:
+			flee_dir = 1.0
+		if (me.global_position.x < 140.0 and flee_dir < 0.0) \
+				or (me.global_position.x > GameConfig.MAP_WIDTH - 140.0 and flee_dir > 0.0):
+			flee_dir = -flee_dir
+		goal = Vector2(clampf(me.global_position.x + flee_dir * 700.0, 80.0, GameConfig.MAP_WIDTH - 80.0), me.global_position.y)
+		if dist < 200.0 and _ability_timer > 1.5:
+			want_ability = true
 
-
-func _run_toward(x: float, me: Player) -> void:
-	if x > me.global_position.x + 12.0:
-		_run_dir(1.0, me)
-	elif x < me.global_position.x - 12.0:
-		_run_dir(-1.0, me)
+	_apply_cmd(_nav.navigate(me, goal, delta))
+	if want_ability:
+		_ability_timer = 0.0
+		Input.action_press("ability_primary")
 	else:
-		_stop(me)
+		Input.action_release("ability_primary")
 
 
-func _run_dir(dir: float, _me: Player) -> void:
-	if dir > 0.0:
+func _nearest_prey(game: Game, me: Player) -> Player:
+	var best: Player = null
+	var nearest := INF
+	for p in game.get_player_nodes():
+		if p.peer_id == me.peer_id:
+			continue
+		var d: float = p.global_position.distance_to(me.global_position)
+		if d < nearest:
+			nearest = d
+			best = p
+	return best
+
+
+## Translate a BotNavigator command into the same input actions a human uses.
+func _apply_cmd(cmd: Dictionary) -> void:
+	var d: float = cmd["move_dir"]
+	if d > 0.0:
 		Input.action_press("move_right")
 		Input.action_release("move_left")
-	else:
+	elif d < 0.0:
 		Input.action_press("move_left")
 		Input.action_release("move_right")
-
-
-func _stop(_me: Player) -> void:
-	Input.action_release("move_left")
-	Input.action_release("move_right")
+	else:
+		Input.action_release("move_left")
+		Input.action_release("move_right")
+	if cmd["drop"]:
+		Input.action_press("move_down")
+	else:
+		Input.action_release("move_down")
+	if cmd["jump"]:
+		Input.action_press("jump")
+	else:
+		Input.action_release("jump")
 
 
 func _pass(check: String) -> void:

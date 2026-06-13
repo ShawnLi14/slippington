@@ -202,7 +202,10 @@ func _authority_physics(delta: float) -> void:
 
 		var jump_pressed := bot_brain.poll_jump() if bot_brain != null else Input.is_action_just_pressed("jump")
 		if jump_pressed and is_on_floor():
-			if bot_brain == null and Input.is_action_pressed("move_down"):
+			# A bot drops through one-way platforms by flagging want_drop; a
+			# human holds Down. Either way a "drop" jump becomes a pass-through.
+			var want_drop := bot_brain.want_drop if bot_brain != null else Input.is_action_pressed("move_down")
+			if want_drop:
 				_drop_through_left = DROP_THROUGH_TIME
 			else:
 				velocity.y = GameConfig.JUMP_VELOCITY * player_class.jump_mult

@@ -179,8 +179,15 @@ static func _segment_hits_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
 ## Can a player travel from surface `a` to surface `b`? Jump or fall, with
 ## a 3-point arc (takeoff, apex, landing) checked against blockers.
 static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
+	return not _edge_geom(a, b, blockers).is_empty()
+
+
+## The geometry of the first valid arc from `a` to `b`, or {} if none exists.
+## {takeoff, land, rise} — `_edge_ok` is just the boolean form, and the nav
+## graph reuses this so a bot flies the exact arc the planner validated.
+static func _edge_geom(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> Dictionary:
 	if a == b:
-		return false
+		return {}
 	# Takeoff/landing geometry uses the BASE rect: a mover sits at its sweep
 	# extremes only for an instant, so an arc that needs the platform at the
 	# far end of its patrol is not honest reachability. (Blockers still use
@@ -219,8 +226,48 @@ static func _edge_ok(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bo
 		var land := Vector2(lx, by - 6.0)
 		if not _segment_blocked(takeoff, apex_pt, blockers, skip) \
 				and not _segment_blocked(apex_pt, land, blockers, skip):
-			return true
-	return false
+			return {"takeoff": takeoff, "land": land, "rise": rise}
+	return {}
+
+
+## A SIDE-approach arc onto `b`: take off from `a` at a point OUTSIDE b's
+## horizontal span and drift onto its near top edge. This is the only way a
+## real body lands on a SOLID platform from below — jumping straight up at it
+## bonks the underside (which _edge_geom permits because it skips b's collider
+## for reachability, but a bot can't fly that). Returns {takeoff, land, rise}
+## or {}. Stacked platforms (b directly above a, same span) correctly yield {}
+## — there's nowhere on a to stand clear of b.
+static func _side_arc(a: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> Dictionary:
+	var ra: Rect2 = a["rect"]
+	var rb: Rect2 = b["rect"]
+	var skip := [a, b]
+	for side in [-1.0, 1.0]:
+		var lx: float = (rb.position.x + 12.0) if side < 0.0 else (rb.end.x - 12.0)
+		for d in [36.0, 72.0, 108.0, 150.0]:
+			var tx: float = (rb.position.x - d) if side < 0.0 else (rb.end.x + d)
+			if tx < ra.position.x or tx > ra.end.x:
+				continue  # takeoff must be standable on a
+			var ay := _top_y_at(a, tx)
+			var by := _top_y_at(b, lx)
+			var rise := ay - by
+			if rise > jump_height() or rise < -4.0:
+				continue  # this helper is for going UP to b's edge
+			var gap := absf(lx - tx)
+			var t_up := JUMP_V / GRAVITY
+			var apex := jump_height() + HEIGHT_MARGIN
+			var fall_h := apex - rise
+			if fall_h < 0.0:
+				continue
+			var t := t_up + sqrt(2.0 * fall_h / GRAVITY)
+			if gap + EDGE_MARGIN > SPEED * t:
+				continue
+			var takeoff := Vector2(tx, ay - 4.0)
+			var apex_pt := Vector2((tx + lx) / 2.0, ay - apex - GameConfig.PLAYER_SIZE / 2.0)
+			var land := Vector2(lx, by - 6.0)
+			if not _segment_blocked(takeoff, apex_pt, blockers, skip) \
+					and not _segment_blocked(apex_pt, land, blockers, skip):
+				return {"takeoff": takeoff, "land": land, "rise": rise}
+	return {}
 
 
 static func _spring_edge_ok(pad_pos: Vector2, support: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
@@ -312,6 +359,95 @@ static func _build_graph(map: Dictionary) -> Dictionary:
 		if surfaces[i]["rect"].position.y > surfaces[ground]["rect"].position.y:
 			ground = i
 	return {"surfaces": surfaces, "adj": adj, "ground": ground}
+
+
+## Public navigation graph for bots. Same reachability the planner validates,
+## plus the execution geometry each edge needs — where to take off, where to
+## aim, and what kind of move it is — so a bot can actually fly the arc the
+## planner proved exists instead of shuffling blindly into walls. Also flags
+## cut-vertex surfaces (a fleeing bot avoids diving into a dead end). Pure
+## function of the final map; callers build it once and cache it.
+##
+## Returns {surfaces, adj, edges, ground, cut}:
+##   edges[i] = [{to, kind, takeoff: Vector2, land: Vector2}], kind in
+##   "jump" (run to takeoff, jump, steer to land), "drop" (straight down
+##   through a one-way platform), "spring" (run onto the pad, no jump),
+##   "portal" (walk into the mouth).
+static func nav_graph(map: Dictionary) -> Dictionary:
+	var g := _build_graph(map)
+	var surfaces: Array = g["surfaces"]
+	var blockers := _blockers(map)
+	var n: int = surfaces.size()
+	var edges: Array = []
+	for i in n:
+		edges.append([])
+	# Per-edge execution geometry. The planner's adj counts straight-up arcs
+	# onto solid platforms as reachable (it skips the target's collider), but
+	# a body can't fly those — so for an UPWARD hop onto a solid surface we
+	# require a real side approach and drop the edge if none exists. Thru
+	# platforms can be entered straight up (you pass through from below), and
+	# downward hops (fall/drop) are kept as the planner found them.
+	for i in n:
+		for j in g["adj"][i]:
+			var geom := _edge_geom(surfaces[i], surfaces[j], blockers)
+			if geom.is_empty():
+				continue
+			var rb: Rect2 = surfaces[j]["rect"]
+			var solid: bool = not surfaces[j].get("thru", false)
+			var straight_up: bool = geom["takeoff"].x > rb.position.x and geom["takeoff"].x < rb.end.x
+			if geom["rise"] > 8.0 and solid and straight_up:
+				geom = _side_arc(surfaces[i], surfaces[j], blockers)
+				if geom.is_empty():
+					continue  # solid platform with no executable side approach
+			var horiz: float = absf(geom["land"].x - geom["takeoff"].x)
+			var kind := "jump"
+			if geom["rise"] < -8.0 and horiz < GameConfig.PLAYER_SIZE * 1.2:
+				kind = "drop"  # b sits straight below a — fall through, don't hop
+			edges[i].append({"to": j, "kind": kind, "takeoff": geom["takeoff"], "land": geom["land"]})
+	# Spring and portal edges carry their own takeoff (the pad / the mouth).
+	for obj in map.get("objects", []):
+		if obj["type"] == "spring":
+			var support = _spring_support(map, obj)
+			if support == null:
+				continue
+			var si: int = surfaces.find(support)
+			for j in n:
+				if j != si and _spring_edge_ok(obj["pos"], support, surfaces[j], blockers):
+					var cx: float = surfaces[j]["rect"].get_center().x
+					edges[si].append({"to": j, "kind": "spring", "takeoff": obj["pos"],
+							"land": Vector2(cx, _top_y_at(surfaces[j], cx))})
+		elif obj["type"] == "portal":
+			var enter = _portal_support(map, obj["pos"])
+			var exit_surf = _portal_support(map, obj["dest"])
+			if enter != null and exit_surf != null:
+				var ei: int = surfaces.find(enter)
+				var xi: int = surfaces.find(exit_surf)
+				if ei != xi:
+					edges[ei].append({"to": xi, "kind": "portal", "takeoff": obj["pos"], "land": obj["dest"]})
+	# Cut vertices: any surface whose removal orphans another reachable one.
+	var base := _bfs(g)
+	var cut: Array = []
+	cut.resize(n)
+	cut.fill(false)
+	for v in n:
+		if v == g["ground"] or not base[v]:
+			continue
+		var without := _bfs(g, v)
+		for i in n:
+			if i != v and base[i] and not without[i]:
+				cut[v] = true
+				break
+	return {"surfaces": surfaces, "adj": g["adj"], "edges": edges, "ground": g["ground"], "cut": cut}
+
+
+## Walkable height of a surface at x — public accessor for bot navigation.
+static func surface_top_y(s: Dictionary, x: float) -> float:
+	return _top_y_at(s, x)
+
+
+## A surface's footprint including any mover sweep — public for localization.
+static func surface_sweep_rect(s: Dictionary) -> Rect2:
+	return _sweep_rect(s)
 
 
 ## BFS over a prebuilt graph; skip_idx simulates removing one surface.

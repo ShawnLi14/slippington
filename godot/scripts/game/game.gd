@@ -7,6 +7,7 @@ extends Node2D
 var map_data: Dictionary
 var _players: Dictionary = {}  # peer_id -> Player node
 var _hud: CanvasLayer
+var _nav_graph: Dictionary = {}  # bot navigation graph, built on first use
 
 
 func _ready() -> void:
@@ -82,6 +83,14 @@ func _spawn_players() -> void:
 			player.add_child(player.bot_brain)
 		add_child(player)
 		_players[peer_id] = player
+
+
+## Bot navigation graph for this map, built lazily on first request (only
+## practice bots and test bots need it — human matches never pay for it).
+func get_nav_graph() -> Dictionary:
+	if _nav_graph.is_empty():
+		_nav_graph = MapPlanner.nav_graph(map_data)
+	return _nav_graph
 
 
 func get_player_node(peer_id: int) -> Player:
