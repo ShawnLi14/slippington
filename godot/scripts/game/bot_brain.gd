@@ -14,18 +14,19 @@ var want_drop := false
 
 var _jump_queued := false
 var _nav: BotNavigator
+var _policy := BotPolicy.new()
 
 
 func _physics_process(delta: float) -> void:
 	var me := get_parent() as Player
 	if me == null:
 		return
-	var target := _nearest_other(me)
-	if target == null:
-		move_dir = 0.0
-		want_drop = false
-		return
-	var cmd := _navigator(me).navigate(me, target.global_position, delta)
+	var nav := _navigator(me)
+	# BotPolicy chooses the goal by role (chase the prey / flee the hunter);
+	# the navigator turns that into movement. The practice bot is always "it",
+	# so in practice this resolves to a cut-off chase, but the logic is general.
+	var goal := _policy.decide_goal(me, get_tree().get_nodes_in_group("players"), nav.graph, delta)
+	var cmd := nav.navigate(me, goal, delta)
 	move_dir = cmd["move_dir"]
 	want_drop = cmd["drop"]
 	if cmd["jump"]:
@@ -37,19 +38,6 @@ func poll_jump() -> bool:
 	var j := _jump_queued
 	_jump_queued = false
 	return j
-
-
-func _nearest_other(me: Player) -> Player:
-	var best: Player = null
-	var nearest := INF
-	for p in get_tree().get_nodes_in_group("players"):
-		if p == me:
-			continue
-		var d: float = p.global_position.distance_to(me.global_position)
-		if d < nearest:
-			nearest = d
-			best = p
-	return best
 
 
 func _navigator(me: Player) -> BotNavigator:

@@ -42,6 +42,7 @@ const NAV_PASS_FRACTION := 0.35
 var _jump_cooldown := 0.0
 var _ability_timer := 0.0
 var _nav: BotNavigator
+var _policy: BotPolicy
 
 # nav-test (navigation soundness) state.
 var _nav_targets: Array = []
@@ -609,36 +610,30 @@ func _smart_move(game: Game, delta: float) -> void:
 		return
 	if _nav == null:
 		_nav = BotNavigator.new(game.get_nav_graph())
+	if _policy == null:
+		_policy = BotPolicy.new()
 	_ability_timer += delta
 
-	var goal: Vector2
 	var want_ability := false
 	if me.is_it():
 		var target := _nearest_prey(game, me)
 		if target == null:
 			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
 			return
-		goal = target.global_position
 		if _ability_timer > 2.0 and target.global_position.distance_to(me.global_position) < 350.0:
 			want_ability = true
 	else:
 		var hunter := game.get_player_node(GameState.it_peer)
 		if hunter == null or hunter.global_position.distance_to(me.global_position) > 520.0:
+			# Hunter not a threat — rest (a real player wouldn't sprint forever).
 			_apply_cmd({"move_dir": 0.0, "jump": false, "drop": false})
 			Input.action_release("ability_primary")
 			return
-		var dist: float = hunter.global_position.distance_to(me.global_position)
-		# Flee to a far point on the side away from the hunter; nav routes it.
-		var flee_dir: float = signf(me.global_position.x - hunter.global_position.x)
-		if flee_dir == 0.0:
-			flee_dir = 1.0
-		if (me.global_position.x < 140.0 and flee_dir < 0.0) \
-				or (me.global_position.x > GameConfig.MAP_WIDTH - 140.0 and flee_dir > 0.0):
-			flee_dir = -flee_dir
-		goal = Vector2(clampf(me.global_position.x + flee_dir * 700.0, 80.0, GameConfig.MAP_WIDTH - 80.0), me.global_position.y)
-		if dist < 200.0 and _ability_timer > 1.5:
+		if hunter.global_position.distance_to(me.global_position) < 200.0 and _ability_timer > 1.5:
 			want_ability = true
 
+	# BotPolicy picks the goal by role; the navigator routes to it.
+	var goal := _policy.decide_goal(me, game.get_player_nodes(), _nav.graph, delta)
 	_apply_cmd(_nav.navigate(me, goal, delta))
 	if want_ability:
 		_ability_timer = 0.0
