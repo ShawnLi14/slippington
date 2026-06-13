@@ -27,11 +27,12 @@ func _physics_process(delta: float) -> void:
 	# the navigator turns that into movement. The practice bot is always "it",
 	# so in practice this resolves to a cut-off chase, but the logic is general.
 	var players := get_tree().get_nodes_in_group("players")
-	var goal := _policy.decide_goal(me, players, nav.graph, delta)
-	var cmd := nav.navigate(me, goal, delta)
+	var diff := BotDifficulty.params(GameState.practice_difficulty)
+	var decision := _policy.tick(me, players, nav.graph, diff, delta)
+	var cmd := nav.navigate(me, decision["goal"], delta)
 	move_dir = cmd["move_dir"]
 	want_drop = cmd["drop"]
-	want_ability = BotPolicy.should_use_ability(me, players)
+	want_ability = decision["ability"]
 	if cmd["jump"]:
 		_jump_queued = true
 

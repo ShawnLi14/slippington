@@ -43,6 +43,7 @@ var _jump_cooldown := 0.0
 var _ability_timer := 0.0
 var _nav: BotNavigator
 var _policy: BotPolicy
+var bot_diff_level := "hard"  # playtest bots default to the toughest tier
 
 # nav-test (navigation soundness) state.
 var _nav_targets: Array = []
@@ -101,6 +102,8 @@ func _ready() -> void:
 			NetworkManager.force_relay = true
 		elif arg.begins_with("--trace="):
 			_nav_trace = int(arg.trim_prefix("--trace="))
+		elif arg.begins_with("--difficulty="):
+			bot_diff_level = arg.trim_prefix("--difficulty=")
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
@@ -626,11 +629,11 @@ func _smart_move(game: Game, delta: float) -> void:
 			Input.action_release("ability_primary")
 			return
 
-	# BotPolicy picks the goal by role; the navigator routes to it.
+	# BotPolicy picks the goal + ability by role and difficulty; nav routes it.
 	var players := game.get_player_nodes()
-	var goal := _policy.decide_goal(me, players, _nav.graph, delta)
-	_apply_cmd(_nav.navigate(me, goal, delta))
-	if BotPolicy.should_use_ability(me, players):
+	var decision := _policy.tick(me, players, _nav.graph, BotDifficulty.params(bot_diff_level), delta)
+	_apply_cmd(_nav.navigate(me, decision["goal"], delta))
+	if decision["ability"]:
 		Input.action_press("ability_primary")
 	else:
 		Input.action_release("ability_primary")

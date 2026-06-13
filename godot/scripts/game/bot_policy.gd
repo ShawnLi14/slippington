@@ -7,41 +7,55 @@ extends RefCounted
 ## are recomputed on a cadence and held, so the bot commits to a route instead
 ## of dithering every frame.
 
-const EVADE_REPLAN := 0.4
+var _goal := Vector2.ZERO
+var _want_ability := false
+var _cd := 0.0
+var _inited := false
 
-var _evade_goal := Vector2.ZERO
-var _evade_cd := 0.0
+
+## Re-decide goal + ability on the difficulty's reaction cadence, holding the
+## decision in between. The stale window IS the difficulty: a high reaction
+## means the bot commits to where you were and is easy to juke. Returns
+## {goal, ability}. players = game.get_player_nodes(), diff = BotDifficulty.params.
+func tick(me: Node, players: Array, graph: Dictionary, diff: Dictionary, delta: float) -> Dictionary:
+	_cd -= delta
+	if not _inited or _cd <= 0.0:
+		_inited = true
+		_cd = diff.get("reaction", 0.16)
+		_recompute(me, players, graph, diff)
+	return {"goal": _goal, "ability": _want_ability}
 
 
-## The point this bot should head for this frame. players = game.get_player_nodes().
-func decide_goal(me: Node, players: Array, graph: Dictionary, delta: float) -> Vector2:
+func _recompute(me: Node, players: Array, graph: Dictionary, diff: Dictionary) -> void:
+	# Newbie dithering: freeze for a beat instead of reacting.
+	if diff.get("hesitate", 0.0) > 0.0 and randf() < diff["hesitate"]:
+		_goal = me.global_position
+		_want_ability = false
+		return
 	if me.is_it():
 		var prey := _nearest_other(me, players)
-		if prey == null:
-			return me.global_position
-		return chase_goal(me, prey)
-	var hunter := _hunter(me, players)
-	if hunter == null:
-		return me.global_position
-	_evade_cd -= delta
-	if _evade_cd <= 0.0 or _evade_goal == Vector2.ZERO:
-		_evade_cd = EVADE_REPLAN
-		_evade_goal = evade_goal(me.global_position, hunter.global_position, graph)
-	return _evade_goal
+		_goal = chase_goal(me, prey, diff.get("lead", 0.3)) if prey != null else me.global_position
+	else:
+		var hunter := _hunter(me, players)
+		_goal = evade_goal(me.global_position, hunter.global_position, graph, diff.get("evade_smart", true)) if hunter != null else me.global_position
+	_want_ability = randf() < diff.get("ability_chance", 0.75) and should_use_ability(me, players)
 
 
-## Lead the prey by a little of its current velocity so the chaser arrives
-## where the prey is going, scaled by how far off it is.
-static func chase_goal(me: Node, prey: Node) -> Vector2:
-	var dist: float = me.global_position.distance_to(prey.global_position)
-	var lead: float = clampf(dist / GameConfig.PLAYER_SPEED, 0.0, 0.55)
+## Lead the prey by `lead` seconds of its current velocity so the chaser
+## arrives where the prey is going (cut-off), not where it was (tailing).
+static func chase_goal(me: Node, prey: Node, lead := 0.3) -> Vector2:
 	return prey.global_position + prey.velocity * lead
 
 
-## Pick the surface that best gets away from the hunter: far from it, not too
-## far from us (so we can actually reach it), penalise cut-vertex dead ends,
-## and lightly favour height.
-static func evade_goal(me_pos: Vector2, hunter_pos: Vector2, graph: Dictionary) -> Vector2:
+## Where to flee. Smart: the best escape surface (far from the hunter, not a
+## dead end, mild height bias). Dumb: just bolt away horizontally — which runs
+## you into a wall and corners you, exactly how a new player loses.
+static func evade_goal(me_pos: Vector2, hunter_pos: Vector2, graph: Dictionary, smart := true) -> Vector2:
+	if not smart:
+		var dir := signf(me_pos.x - hunter_pos.x)
+		if dir == 0.0:
+			dir = 1.0
+		return Vector2(clampf(me_pos.x + dir * 600.0, 80.0, GameConfig.MAP_WIDTH - 80.0), me_pos.y)
 	var surfaces: Array = graph["surfaces"]
 	var cut: Array = graph["cut"]
 	var best := me_pos

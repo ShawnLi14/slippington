@@ -52,6 +52,10 @@ const PRACTICE_BOT_ID := 2
 signal practice_tagged
 var practice_mode := false
 var practice_caught := 0
+## Set by the menu before start_practice: how good the chaser is, and what
+## class it plays (so you can drill against a specific ability).
+var practice_difficulty := "medium"
+var practice_bot_class := "slipper"
 
 var _host_ability_last_use: Dictionary = {}  # peer_id -> {ability_id: msec}
 var host_ability_use_counts: Dictionary = {}  # peer_id -> int (telemetry)
@@ -111,7 +115,7 @@ func start_practice() -> void:
 	players = {
 		1: {"name": local_name, "class_id": local_class_id, "ready": true,
 			"color_index": 0, "is_it": false, "time_as_it": 0.0},
-		PRACTICE_BOT_ID: {"name": "Chaser", "class_id": "slipper", "ready": true,
+		PRACTICE_BOT_ID: {"name": "Chaser", "class_id": practice_bot_class, "ready": true,
 			"color_index": 1, "is_it": true, "time_as_it": 0.0},
 	}
 	it_peer = PRACTICE_BOT_ID
