@@ -56,10 +56,17 @@ func navigate(me: Node, goal_pos: Vector2, delta: float) -> Dictionary:
 	_was_grounded = grounded
 	if grounded:
 		_cur = localize(me.global_position)
-		_path = _plan(_cur, localize(goal_pos))
+		var gsurf := localize(goal_pos)
+		_path = _plan(_cur, gsurf)
+		# If the goal's surface can't be reached from here (some surfaces are
+		# only reachable by arcs a body can't fly), don't just stand there —
+		# route to the reachable surface CLOSEST to the goal so the bot keeps
+		# pressuring from below and pounces when the target comes down.
+		if _path.size() == 1 and gsurf != _cur:
+			_path = _plan(_cur, _nearest_reachable_to(goal_pos))
 
 	if _path.size() <= 1:
-		# On the goal surface (or stranded): home in on the exact x.
+		# Genuinely on (or as close as we can get to) the goal: home in on x.
 		cmd["move_dir"] = _toward(px, goal_pos.x, 8.0)
 		_recover(me, delta, cmd)
 		return cmd
@@ -244,6 +251,28 @@ func _plan(from_i: int, to_i: int) -> Array:
 	while path[0] != from_i:
 		path.insert(0, prev[path[0]])
 	return path
+
+
+## The surface reachable from _cur whose standing point is nearest goal_pos.
+## One BFS over the edge graph, then pick the closest — used as a fallback
+## target when the goal's own surface is unreachable.
+func _nearest_reachable_to(goal_pos: Vector2) -> int:
+	var seen := {_cur: true}
+	var q: Array = [_cur]
+	var best := _cur
+	var best_d := INF
+	while not q.is_empty():
+		var c: int = q.pop_front()
+		var ctr: Vector2 = (graph["surfaces"][c]["rect"] as Rect2).get_center()
+		var d := ctr.distance_to(goal_pos)
+		if d < best_d:
+			best_d = d
+			best = c
+		for e in graph["edges"][c]:
+			if not seen.has(e["to"]):
+				seen[e["to"]] = true
+				q.append(e["to"])
+	return best
 
 
 func _edge_to(i: int, j: int):

@@ -486,9 +486,23 @@ func apply_stun(duration: float) -> void:
 	stunned.emit(duration)
 
 
-## Swap helper: tell a peer to teleport (its half of a position swap).
+## Stun helper: freeze a peer. In practice mode the only other player is the
+## local human, so the target is ourselves — run the effect directly rather
+## than firing a call_remote RPC at our own id (which Godot rejects).
+func send_stun(target_peer: int, duration: float) -> void:
+	if target_peer == multiplayer.get_unique_id():
+		apply_stun(duration)
+	else:
+		apply_stun.rpc_id(target_peer, duration)
+
+
+## Swap helper: tell a peer to teleport (its half of a position swap). Same
+## local-target guard as send_stun for offline practice.
 func send_swap(target_peer: int, pos: Vector2) -> void:
-	apply_swap.rpc_id(target_peer, pos)
+	if target_peer == multiplayer.get_unique_id():
+		apply_swap(pos)
+	else:
+		apply_swap.rpc_id(target_peer, pos)
 
 
 @rpc("any_peer", "call_remote", "reliable")
