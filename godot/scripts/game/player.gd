@@ -39,6 +39,12 @@ var bot_brain: BotBrain = null
 
 var facing_right := true
 var anim_state := "idle"
+## Visual lean to match the slope underfoot. The authority computes the
+## target from the floor normal; both it and puppets ease _tilt toward
+## _tilt_target every frame so the body banks smoothly on ramps. Only the
+## drawing rotates — the collision box and name label stay upright.
+var _tilt := 0.0
+var _tilt_target := 0.0
 var stun_left := 0.0
 var hitstop_left := 0.0
 var dash_left := 0.0
@@ -146,18 +152,22 @@ func _physics_process(delta: float) -> void:
 		# scene on the phase change and late packets would target dead nodes.
 		if _sync_accumulator >= 1.0 / GameConfig.SYNC_HZ and GameState.phase == GameState.Phase.PLAYING:
 			_sync_accumulator = 0.0
-			sync_state.rpc(Engine.get_physics_frames(), global_position, velocity, facing_right, anim_state, _teleport_count)
+			sync_state.rpc(Engine.get_physics_frames(), global_position, velocity, facing_right, anim_state, _teleport_count, _tilt_target)
 
 	if is_it() != _was_it:
 		_was_it = is_it()
 		queue_redraw()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Puppets interpolate per RENDERED frame (not per physics tick) so they
 	# stay smooth on high-refresh displays; the timeline is continuous.
 	if not is_multiplayer_authority():
 		_puppet_interpolate()
+	var prev_tilt := _tilt
+	_tilt = lerp_angle(_tilt, _tilt_target, clampf(delta * 12.0, 0.0, 1.0))
+	if absf(angle_difference(prev_tilt, _tilt)) > 0.002:
+		queue_redraw()
 
 
 func _authority_physics(delta: float) -> void:
@@ -202,6 +212,13 @@ func _authority_physics(delta: float) -> void:
 			try_use_ability()
 
 	move_and_slide()
+
+	# Bank to the slope: a floor that isn't flat tilts the body to stand
+	# perpendicular to it (flat ground and air both resolve to upright).
+	if is_on_floor():
+		_tilt_target = get_floor_normal().angle() + PI / 2.0
+	else:
+		_tilt_target = 0.0
 
 	# Tagger-side hit detection: the "it" player's own client decides when
 	# contact happens (true self vs. the puppets it actually sees), then the
@@ -266,7 +283,7 @@ func get_interp_delay() -> float:
 
 
 @rpc("authority", "call_remote", "unreliable")
-func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int) -> void:
+func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int, p_tilt: float) -> void:
 	if multiplayer.is_server():
 		_record_history(pos)
 	# Unreliable channels reorder: a late stale packet must not rewind the
@@ -274,6 +291,7 @@ func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: S
 	if tick <= _last_seq:
 		return
 	_last_seq = tick
+	_tilt_target = p_tilt
 
 	var now := Time.get_ticks_msec() / 1000.0
 	var sender_t := float(tick) * PHYS_DT
@@ -584,13 +602,16 @@ func _draw() -> void:
 	var body_color := color
 	if stun_left > 0.0:
 		body_color = color.lerp(Color(0.4, 0.6, 1.0), 0.6)
-	draw_rect(Rect2(-half, -half, GameConfig.PLAYER_SIZE, GameConfig.PLAYER_SIZE), body_color)
 
-	# Eyes show facing direction.
+	# Body and eyes bank with the slope; the arrow below is drawn after the
+	# transform resets so it always points straight down at the player.
+	draw_set_transform(Vector2.ZERO, _tilt)
+	draw_rect(Rect2(-half, -half, GameConfig.PLAYER_SIZE, GameConfig.PLAYER_SIZE), body_color)
 	var eye_dir := 6.0 if facing_right else -6.0
 	var eye_color := Color(0.06, 0.06, 0.1)
 	draw_circle(Vector2(eye_dir - 4.0, -8.0), 4.0, eye_color)
 	draw_circle(Vector2(eye_dir + 8.0, -8.0), 4.0, eye_color)
+	draw_set_transform(Vector2.ZERO, 0.0)
 
 	if is_it():
 		# Red arrow above the head: this player is IT.

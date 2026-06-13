@@ -199,6 +199,24 @@ func _ready() -> void:
 			GameState.host_start_game(map_choice)
 			_take_screenshot(1.5)
 			return
+		"shot-slope":
+			# Drop the player onto the first ramp in the map and screenshot so
+			# the slope-bank tilt is visible standing still.
+			NetworkManager.host_lan(port)
+			GameState.host_start_game(map_choice)
+			await get_tree().create_timer(0.5).timeout
+			var g := get_tree().root.get_node_or_null("Main/Screen") as Game
+			var me := g.local_player() if g != null else null
+			for p in g.map_data["platforms"]:
+				if p.get("ramp", 0) != 0:
+					var r: Rect2 = p["rect"]
+					me.global_position = r.position + Vector2(r.size.x / 2.0, -40.0)
+					print("[bot] placed on ramp%d at %s" % [p["ramp"], me.global_position])
+					break
+			await get_tree().create_timer(1.0).timeout
+			print("[bot] tilt = %.1f deg" % rad_to_deg(me._tilt))
+			_take_screenshot(0.2)
+			return
 		"shot-ability":
 			# Solo game; run, jump, fire the local class ability (--class=)
 			# mid-air, then capture its VFX while it's still on screen. Cast

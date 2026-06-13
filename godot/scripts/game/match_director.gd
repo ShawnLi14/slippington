@@ -23,6 +23,12 @@ const VALIDATE_CONTACT_SIZE := GameConfig.PLAYER_SIZE * 1.2
 ## Anti-garbage bound: the claimed position must be near where the host
 ## believes the claimant is (their puppet lags by ~RTT + interp).
 const CLAIMANT_POS_TOLERANCE := 150.0
+## Grace period after everyone loads in before the clock starts: a "get
+## ready, GO" beat so players orient and spread out from spawn. Tagging is
+## disabled until it elapses, so nobody's caught before the round begins.
+## Measured off GameState.world_clock, which every peer resets together on
+## the start_game RPC, so all screens count down in lockstep.
+const PREGAME_SEC := 5.0
 
 var game: Node2D  # the Game scene, used to look up player nodes
 
@@ -56,26 +62,32 @@ func _exit_tree() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or GameState.phase != GameState.Phase.PLAYING:
 		return
-	if GameState.match_running:
-		var it := GameState.it_peer
-		if GameState.players.has(it):
-			GameState.players[it]["time_as_it"] += delta
-		_sample_accumulator += delta
-		if _sample_accumulator >= 1.0:
-			_sample_accumulator = 0.0
-			for node in game.get_player_nodes():
-				if not _height_samples.has(node.peer_id):
-					_height_samples[node.peer_id] = {"upper": 0, "total": 0}
-				_height_samples[node.peer_id]["total"] += 1
-				if node.global_position.y < GameConfig.MAP_HEIGHT * 0.6:
-					_height_samples[node.peer_id]["upper"] += 1
-		_remaining -= delta
-		var whole_second := int(ceil(_remaining))
-		if whole_second != _last_broadcast_second:
-			_last_broadcast_second = whole_second
-			GameState.timer_synced.rpc(maxf(0.0, _remaining))
-		if _remaining <= 0.0:
-			_end_match()
+	# Auto-start the clock once the grace period elapses. Practice mode has no
+	# clock (the bot is "it" forever), so it never starts.
+	if not GameState.match_running:
+		if not GameState.practice_mode and GameState.world_clock >= PREGAME_SEC:
+			_remaining = _match_duration
+			GameState.timer_started.rpc(_remaining)
+		return
+	var it := GameState.it_peer
+	if GameState.players.has(it):
+		GameState.players[it]["time_as_it"] += delta
+	_sample_accumulator += delta
+	if _sample_accumulator >= 1.0:
+		_sample_accumulator = 0.0
+		for node in game.get_player_nodes():
+			if not _height_samples.has(node.peer_id):
+				_height_samples[node.peer_id] = {"upper": 0, "total": 0}
+			_height_samples[node.peer_id]["total"] += 1
+			if node.global_position.y < GameConfig.MAP_HEIGHT * 0.6:
+				_height_samples[node.peer_id]["upper"] += 1
+	_remaining -= delta
+	var whole_second := int(ceil(_remaining))
+	if whole_second != _last_broadcast_second:
+		_last_broadcast_second = whole_second
+		GameState.timer_synced.rpc(maxf(0.0, _remaining))
+	if _remaining <= 0.0:
+		_end_match()
 
 
 ## A peer (or the host player locally) claims it tagged target_peer at
@@ -84,6 +96,10 @@ func _physics_process(delta: float) -> void:
 ## contact range of that position, on the claimant's screen?
 func handle_claim(claimant: int, target_peer: int, claimant_pos: Vector2, interp_delay: float) -> void:
 	if GameState.phase != GameState.Phase.PLAYING:
+		return
+	# No tags during the pre-match grace period (practice mode has no clock,
+	# so the bot can still "catch" you for feedback the whole time).
+	if not GameState.practice_mode and not GameState.match_running:
 		return
 	if claimant != GameState.it_peer or claimant == target_peer:
 		return
@@ -129,9 +145,6 @@ func _transfer_tag(from_peer: int, to_peer: int) -> void:
 	_immune_peer = from_peer  # the old "it" can't be tagged right back
 	_immune_until_ms = now + int(GameConfig.TAG_IMMUNITY_SEC * 1000.0)
 	GameState.set_it.rpc(to_peer, from_peer)
-	if not GameState.match_running:
-		_remaining = _match_duration
-		GameState.timer_started.rpc(_remaining)
 
 
 func _end_match() -> void:

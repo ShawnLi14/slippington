@@ -16,6 +16,7 @@ var _keycap_label: Label
 var _cooldown_fill: Panel
 var _flash_label: Label
 var _slush_warned := false
+var _was_running := false
 
 const TEAL := Color("#4ecdc4")
 const RED := Color("#ff6b6b")
@@ -142,8 +143,23 @@ func _process(_delta: float) -> void:
 			tween.tween_interval(1.0)
 			tween.tween_property(_flash_label, "modulate:a", 0.0, 0.5)
 	else:
-		_timer_label.text = "%d player%s" % [GameState.players.size(), "" if GameState.players.size() == 1 else "s"]
-		_status_label.text = "First tag starts the clock"
+		# Pre-match grace: a "get ready" countdown to the auto-start. Reads off
+		# the shared world_clock, so every screen shows the same number.
+		var countdown := ceili(maxf(0.0, MatchDirector.PREGAME_SEC - GameState.world_clock))
+		_timer_label.text = str(maxi(countdown, 1))
+		_timer_label.add_theme_color_override("font_color", TEAL)
+		var me_it := GameState.it_peer == multiplayer.get_unique_id()
+		_status_label.text = "Get ready — you're IT!" if me_it else "Get ready to run!"
+
+	# When the clock starts, sell it with a GO! flash on every screen.
+	if GameState.match_running and not _was_running:
+		_flash_label.text = "GO!"
+		_flash_label.add_theme_color_override("font_color", TEAL)
+		_flash_label.modulate.a = 1.0
+		var tween := create_tween()
+		tween.tween_interval(0.5)
+		tween.tween_property(_flash_label, "modulate:a", 0.0, 0.4)
+	_was_running = GameState.match_running
 
 	var me: Player = game.local_player() if game != null else null
 	if me != null and me.player_class != null and me.player_class.primary_ability != null:

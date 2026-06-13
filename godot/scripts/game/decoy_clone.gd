@@ -29,6 +29,7 @@ var facing_right := true
 
 var _age := 0.0
 var _popped := false
+var _tilt := 0.0
 
 
 func _ready() -> void:
@@ -66,6 +67,13 @@ func _physics_process(delta: float) -> void:
 		velocity.y += GameConfig.GRAVITY * delta
 	velocity.x = run_dir * speed * (SURGE_MULT if _age < SURGE_SECS else 1.0)
 	move_and_slide()
+
+	# Bank to the slope like the real pawn, so the decoy keeps the disguise.
+	var tilt_target := (get_floor_normal().angle() + PI / 2.0) if is_on_floor() else 0.0
+	var prev_tilt := _tilt
+	_tilt = lerp_angle(_tilt, tilt_target, clampf(delta * 12.0, 0.0, 1.0))
+	if absf(angle_difference(prev_tilt, _tilt)) > 0.002:
+		queue_redraw()
 
 	var half := GameConfig.PLAYER_SIZE / 2.0
 	if global_position.x < half:
@@ -114,11 +122,13 @@ func _pop(burst: bool) -> void:
 func _draw() -> void:
 	# Mirrors Player._draw() so the two are indistinguishable at a glance.
 	var half := GameConfig.PLAYER_SIZE / 2.0
+	draw_set_transform(Vector2.ZERO, _tilt)
 	draw_rect(Rect2(-half, -half, GameConfig.PLAYER_SIZE, GameConfig.PLAYER_SIZE), clone_color)
 	var eye_dir := 6.0 if facing_right else -6.0
 	var eye_color := Color(0.06, 0.06, 0.1)
 	draw_circle(Vector2(eye_dir - 4.0, -8.0), 4.0, eye_color)
 	draw_circle(Vector2(eye_dir + 8.0, -8.0), 4.0, eye_color)
+	draw_set_transform(Vector2.ZERO, 0.0)
 	if show_it_arrow:
 		var top := -half - 8.0
 		draw_colored_polygon(
