@@ -81,6 +81,10 @@ func _on_rtc_connect_failed(peer_id: int, reported_dead: bool) -> void:
 # --- ENet (LAN / direct IP fallback) -----------------------------------------
 
 func host_lan(port: int = DEFAULT_PORT) -> void:
+	if OS.has_feature("web"):
+		# ENet has no HTML5 implementation — browsers can't open raw UDP sockets.
+		session_failed.emit("LAN hosting isn't available in the browser — use Create Game.")
+		return
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, GameConfig.MAX_PLAYERS)
@@ -93,6 +97,10 @@ func host_lan(port: int = DEFAULT_PORT) -> void:
 
 
 func join_lan(ip: String, port: int = DEFAULT_PORT) -> void:
+	if OS.has_feature("web"):
+		# ENet has no HTML5 implementation — browsers can't open raw UDP sockets.
+		session_failed.emit("Direct IP connect isn't available in the browser — use a join code.")
+		return
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(ip, port)
@@ -133,7 +141,12 @@ func join_online(code: String) -> void:
 
 
 func _webrtc_available() -> bool:
-	# Without the webrtc-native GDExtension, WebRTCPeerConnection.new()
+	# On Web, WebRTC is provided by the browser itself (no GDExtension needed),
+	# so the class is always usable — skip the probe and the desktop-only
+	# "extension missing" messaging it guards.
+	if OS.has_feature("web"):
+		return true
+	# On desktop, without the webrtc-native GDExtension, WebRTCPeerConnection.new()
 	# returns a stub whose initialize() fails.
 	var test := WebRTCPeerConnection.new()
 	return test.initialize() == OK

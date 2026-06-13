@@ -40,12 +40,20 @@ func close() -> void:
 	_pending_send.clear()
 
 
+## relay_tcp tells the server whether this client can use TCP/TLS TURN relays.
+## The native desktop stack (libjuice) is UDP-relay only, but browsers support
+## turns:/TCP relays — which strict, UDP-blocked networks often require — so web
+## clients ask for the unfiltered relay list.
+func _relay_tcp() -> bool:
+	return OS.has_feature("web")
+
+
 func host_room() -> void:
-	_send({"type": "host"})
+	_send({"type": "host", "relay_tcp": _relay_tcp()})
 
 
 func join_room(code: String) -> void:
-	_send({"type": "join", "code": code.strip_edges().to_upper()})
+	_send({"type": "join", "code": code.strip_edges().to_upper(), "relay_tcp": _relay_tcp()})
 
 
 func send_offer(to_id: int, sdp: String) -> void:

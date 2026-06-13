@@ -131,15 +131,19 @@ func _ready() -> void:
 	center.add_child(_status)
 
 	# --- advanced (collapsed) ---------------------------------------------------
+	# LAN / direct-IP uses ENet, which has no HTML5 implementation, so on web the
+	# advanced panel offers only the signaling-server override.
+	var is_web := OS.has_feature("web")
+	var adv_label := "signaling server" if is_web else "LAN / direct connect"
 	var adv_toggle := Button.new()
-	adv_toggle.text = "▸ advanced: LAN / direct connect"
+	adv_toggle.text = "▸ advanced: " + adv_label
 	adv_toggle.flat = true
 	adv_toggle.add_theme_font_size_override("font_size", 13)
 	adv_toggle.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
 	adv_toggle.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	adv_toggle.pressed.connect(func():
 		_advanced_panel.visible = not _advanced_panel.visible
-		adv_toggle.text = ("▾" if _advanced_panel.visible else "▸") + " advanced: LAN / direct connect"
+		adv_toggle.text = ("▾" if _advanced_panel.visible else "▸") + " advanced: " + adv_label
 	)
 	center.add_child(adv_toggle)
 
@@ -148,20 +152,22 @@ func _ready() -> void:
 	var lan := VBoxContainer.new()
 	lan.add_theme_constant_override("separation", 10)
 	_advanced_panel.add_child(lan)
-	var lan_row := HBoxContainer.new()
-	lan_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	lan_row.add_theme_constant_override("separation", 10)
-	var lan_host_btn := UiTheme.button("HOST LAN")
-	lan_host_btn.pressed.connect(_on_host_lan)
-	lan_row.add_child(lan_host_btn)
-	_ip_edit = LineEdit.new()
-	_ip_edit.placeholder_text = "host ip, e.g. 192.168.1.20"
-	_ip_edit.custom_minimum_size = Vector2(240, 44)
-	lan_row.add_child(_ip_edit)
-	var lan_join_btn := UiTheme.button("JOIN IP")
-	lan_join_btn.pressed.connect(_on_join_lan)
-	lan_row.add_child(lan_join_btn)
-	lan.add_child(lan_row)
+	if not is_web:
+		var lan_row := HBoxContainer.new()
+		lan_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		lan_row.add_theme_constant_override("separation", 10)
+		var lan_host_btn := UiTheme.button("HOST LAN")
+		lan_host_btn.pressed.connect(_on_host_lan)
+		lan_row.add_child(lan_host_btn)
+		_ip_edit = LineEdit.new()
+		_ip_edit.placeholder_text = "host ip, e.g. 192.168.1.20"
+		_ip_edit.custom_minimum_size = Vector2(240, 44)
+		lan_row.add_child(_ip_edit)
+		var lan_join_btn := UiTheme.button("JOIN IP")
+		lan_join_btn.pressed.connect(_on_join_lan)
+		lan_row.add_child(lan_join_btn)
+		lan.add_child(lan_row)
+		_buttons.append_array([lan_host_btn, lan_join_btn])
 	var sig_row := HBoxContainer.new()
 	sig_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	sig_row.add_theme_constant_override("separation", 10)
@@ -172,7 +178,6 @@ func _ready() -> void:
 	sig_row.add_child(_signaling_edit)
 	lan.add_child(sig_row)
 	center.add_child(_advanced_panel)
-	_buttons.append_array([lan_host_btn, lan_join_btn])
 
 	# Method connections only — lambdas on autoload signals outlive this
 	# screen and crash release builds once it's freed.

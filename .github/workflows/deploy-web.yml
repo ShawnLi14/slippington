@@ -1,0 +1,66 @@
+name: Deploy Web (GitHub Pages)
+
+# Builds the Godot HTML5 export and publishes it to GitHub Pages.
+# The web build is single-threaded (no SharedArrayBuffer), so it needs no
+# COOP/COEP headers — which is exactly why plain GitHub Pages can host it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one Pages deploy at a time; don't cancel an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.4.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} + web export templates
+        run: |
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "${BASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL -o templates.tpz "${BASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q templates.tpz
+          mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          godot --version
+
+      - name: Export Web build
+        run: |
+          cd godot
+          mkdir -p export/web
+          # First headless run imports assets + registers class_name scripts
+          # (a fresh checkout has no .godot/ cache). Allowed to be noisy.
+          godot --headless --import || true
+          godot --headless --export-release "Web" export/web/index.html || true
+          test -f export/web/index.html && test -f export/web/index.wasm
+          ls -la export/web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: godot/export/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

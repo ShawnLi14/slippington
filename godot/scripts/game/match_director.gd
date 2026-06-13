@@ -194,11 +194,14 @@ func _write_telemetry(ranked: Array) -> void:
 	}
 	var line := JSON.stringify(telemetry)
 	print("[telemetry] " + line)
-	var path := "user://match_history.jsonl"
-	var existing := ""
-	if FileAccess.file_exists(path):
-		existing = FileAccess.get_file_as_string(path)
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f != null:
-		f.store_string(existing + line + "\n")
-		f.close()
+	# In the browser, user:// is IndexedDB-backed (async, non-persistent) and this
+	# telemetry is for desktop playtest/CI analysis only — skip the file I/O on web.
+	if not OS.has_feature("web"):
+		var path := "user://match_history.jsonl"
+		var existing := ""
+		if FileAccess.file_exists(path):
+			existing = FileAccess.get_file_as_string(path)
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f != null:
+			f.store_string(existing + line + "\n")
+			f.close()

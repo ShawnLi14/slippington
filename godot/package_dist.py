@@ -55,6 +55,25 @@ def build_windows():
     print("wrote", dst)
 
 
+def build_web():
+    # The web export is a directory of static files (index.html, .wasm, .pck,
+    # .js, ...) meant to be deployed to a static host. Bundle it into a zip for
+    # handoff; skip cleanly if the Web preset hasn't been exported yet.
+    src = os.path.join(EXPORT, "web")
+    if not os.path.isdir(src):
+        print("skip web: no export/web/ (export the Web preset first)")
+        return
+    dst = os.path.join(EXPORT, "Slippington-Web.zip")
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
+        for root, _dirs, files in os.walk(src):
+            for name in sorted(files):
+                full = os.path.join(root, name)
+                zout.write(full, os.path.relpath(full, src))
+        add_text_file(zout, HOW_TO_PLAY, "HOW_TO_PLAY.txt")
+    print("wrote", dst)
+
+
 if __name__ == "__main__":
     build_macos()
     build_windows()
+    build_web()

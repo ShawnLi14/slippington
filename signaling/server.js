@@ -43,8 +43,9 @@ const CF_TTL_SEC = 24 * 3600;
 const CF_REMINT_MS = 6 * 3600 * 1000;
 let cfCache = { servers: [], mintedAt: 0 };
 
-// The only client is Godot's webrtc-native (libjuice), which supports TURN
-// over UDP only — it logs "TURN transports TCP and TLS are not supported" and
+// Applied only to native (libjuice) clients; browser clients bypass this and
+// get the full list (see iceServersForClient). Godot's webrtc-native (libjuice)
+// supports TURN over UDP only — it logs "TURN transports TCP and TLS are not supported" and
 // floods CreatePermission errors when handed turn?transport=tcp / turns:.
 // Cloudflare advertises 6 TURN URLs (4 of them TCP/TLS); strip those so the
 // client only ever sees usable relays. (Verified separately: the UDP relay
@@ -64,7 +65,11 @@ function udpOnlyTurn(servers) {
     .filter((s) => s.urls.length > 0);
 }
 
-async function iceServersForClient() {
+// allowTcpRelay: browser clients support turns:/TCP relays and need them on
+// UDP-blocked networks, so they get the unfiltered list. Native (libjuice)
+// clients are UDP-relay only and get the udpOnlyTurn()-filtered list. Defaults
+// to false so older native clients that send no flag keep the UDP-only behavior.
+async function iceServersForClient(allowTcpRelay = false) {
   const servers = [...STATIC_ICE];
   const keyId = process.env.CF_TURN_KEY_ID;
   const token = process.env.CF_TURN_API_TOKEN;
@@ -92,7 +97,7 @@ async function iceServersForClient() {
       console.log(`cloudflare TURN mint failed: ${e.message}`);
     }
   }
-  return udpOnlyTurn(servers);
+  return allowTcpRelay ? servers : udpOnlyTurn(servers);
 }
 
 const rooms = new Map(); // code -> { host, peers: Map<peerId, ws>, nextPeerId, lastActivity }
@@ -139,7 +144,7 @@ wss.on('connection', (ws) => {
         });
         ws.roomCode = code;
         ws.peerId = 1;
-        send(ws, { type: 'hosted', code, peer_id: 1, ice_servers: await iceServersForClient() });
+        send(ws, { type: 'hosted', code, peer_id: 1, ice_servers: await iceServersForClient(!!msg.relay_tcp) });
         console.log(`room ${code} created`);
         break;
       }
@@ -161,7 +166,7 @@ wss.on('connection', (ws) => {
         target.lastActivity = Date.now();
         ws.roomCode = code;
         ws.peerId = peerId;
-        send(ws, { type: 'joined', peer_id: peerId, host_id: 1, ice_servers: await iceServersForClient() });
+        send(ws, { type: 'joined', peer_id: peerId, host_id: 1, ice_servers: await iceServersForClient(!!msg.relay_tcp) });
         send(target.peers.get(1), { type: 'peer_joined', peer_id: peerId });
         console.log(`peer ${peerId} joined room ${code}`);
         break;
