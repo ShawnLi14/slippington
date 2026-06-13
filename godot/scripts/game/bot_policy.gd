@@ -11,6 +11,11 @@ var _goal := Vector2.ZERO
 var _want_ability := false
 var _cd := 0.0
 var _inited := false
+# Per-bot RNG seeded from (map, peer) so the hesitation/ability rolls are
+# reproducible run-to-run instead of pulling from the global randf() state —
+# makes telemetry comparable across runs (network jitter aside).
+var _rng := RandomNumberGenerator.new()
+var _seeded := false
 
 
 ## Re-decide goal + ability on the difficulty's reaction cadence, holding the
@@ -18,6 +23,9 @@ var _inited := false
 ## means the bot commits to where you were and is easy to juke. Returns
 ## {goal, ability}. players = game.get_player_nodes(), diff = BotDifficulty.params.
 func tick(me: Node, players: Array, graph: Dictionary, diff: Dictionary, delta: float) -> Dictionary:
+	if not _seeded:
+		_seeded = true
+		_rng.seed = hash("%s:%d" % [GameState.map_seed, me.peer_id])
 	_cd -= delta
 	if not _inited or _cd <= 0.0:
 		_inited = true
@@ -28,7 +36,7 @@ func tick(me: Node, players: Array, graph: Dictionary, diff: Dictionary, delta: 
 
 func _recompute(me: Node, players: Array, graph: Dictionary, diff: Dictionary) -> void:
 	# Newbie dithering: freeze for a beat instead of reacting.
-	if diff.get("hesitate", 0.0) > 0.0 and randf() < diff["hesitate"]:
+	if diff.get("hesitate", 0.0) > 0.0 and _rng.randf() < diff["hesitate"]:
 		_goal = me.global_position
 		_want_ability = false
 		return
@@ -38,7 +46,7 @@ func _recompute(me: Node, players: Array, graph: Dictionary, diff: Dictionary) -
 	else:
 		var hunter := _hunter(me, players)
 		_goal = evade_goal(me.global_position, hunter.global_position, graph, diff.get("evade_smart", true)) if hunter != null else me.global_position
-	_want_ability = randf() < diff.get("ability_chance", 0.75) and should_use_ability(me, players)
+	_want_ability = _rng.randf() < diff.get("ability_chance", 0.75) and should_use_ability(me, players)
 
 
 ## Lead the prey by `lead` seconds of its current velocity so the chaser

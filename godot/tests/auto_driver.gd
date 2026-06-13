@@ -44,6 +44,7 @@ var _ability_timer := 0.0
 var _nav: BotNavigator
 var _policy: BotPolicy
 var bot_diff_level := "hard"  # playtest bots default to the toughest tier
+var expected_players := 2     # host starts once this many have joined
 
 # nav-test (navigation soundness) state.
 var _nav_targets: Array = []
@@ -104,6 +105,9 @@ func _ready() -> void:
 			_nav_trace = int(arg.trim_prefix("--trace="))
 		elif arg.begins_with("--difficulty="):
 			bot_diff_level = arg.trim_prefix("--difficulty=")
+		elif arg.begins_with("--players="):
+			# Host waits for this many players before starting (multi-bot).
+			expected_players = int(arg.trim_prefix("--players="))
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
@@ -354,7 +358,7 @@ func _on_players_changed() -> void:
 	if GameState.players.size() >= 2:
 		_pass("roster_2_players")
 	if mode.begins_with("host") and GameState.phase == GameState.Phase.LOBBY \
-			and GameState.players.size() >= 2 and not _started_game:
+			and GameState.players.size() >= expected_players and not _started_game:
 		var all_ready := true
 		for id in GameState.players:
 			if not GameState.players[id]["ready"]:
