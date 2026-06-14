@@ -26,7 +26,6 @@ var map_choice := "arena"
 var shot_event := "tag"
 var rounds_arg := 1
 var _playing_entries := 0
-var _event_shot_taken := false
 
 var _jump_cooldown := 0.0
 var _ability_timer := 0.0
@@ -150,12 +149,6 @@ func _ready() -> void:
 		# Visual-check mode: capture the tag presentation mid-effect.
 		if mode == "host" and code_file.ends_with(".png") and shot_event == "tag" and _tag_count == 2:
 			_take_screenshot(0.12)
-	)
-	GameState.match_timer_updated.connect(func(remaining):
-		if mode == "host" and code_file.ends_with(".png") and shot_event == "slush" \
-				and remaining <= 6.0 and not _event_shot_taken:
-			_event_shot_taken = true
-			_take_screenshot(0.2)
 	)
 	GameState.match_started.connect(func(_remaining): _pass("timer_started"))
 	GameState.ability_fired.connect(func(peer_id, ability_id):

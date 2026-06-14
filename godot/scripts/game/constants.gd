@@ -17,12 +17,6 @@ const ICE_ACCEL := 700.0  # px/s^2 toward target speed while on ice
 ## full-width ground is the deliberate exception.)
 const PLATFORM_GAP := 100.0
 
-# Endgame slush: rises from the map bottom over the final seconds,
-# heavily slowing anyone caught in it — forces the finish upward.
-const SLUSH_FINAL_SEC := 15.0
-const SLUSH_RISE := 560.0
-const SLUSH_SLOW := 0.45
-
 const TAG_RANGE := 40.0
 const TAG_IMMUNITY_SEC := 1.5
 const MATCH_DURATION_SEC := 60.0

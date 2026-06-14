@@ -1,7 +1,7 @@
 class_name BuildAbility
 extends Ability
 ## Ledge (Mason): conjure a temporary one-way platform just below your feet —
-## an air save, a slush bridge, an instant high ground. Anyone can stand on
+## an air save or an instant high ground. Anyone can stand on
 ## it (it cuts both ways: the tagger gets a step up too), and it can be
 ## dropped through like any thru platform. Crumbles after a few seconds.
 

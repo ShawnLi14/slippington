@@ -243,7 +243,7 @@ static func generate(seed_string: String) -> Dictionary:
 
 	# Moving platforms: 2-3 guaranteed per map, preferring the lowest viable
 	# layers (the lowest-first draw below) but allowed to fall back upward —
-	# high patrols still matter in the slush endgame. The floor just keeps
+	# high patrols still add traversal value. The floor just keeps
 	# them off the literal top edge. Amplitude is clamped to the border gap
 	# up front instead of relying on the planner to strip violators.
 	# (Historical note: a y>=420 hard ceiling lived here briefly — it was

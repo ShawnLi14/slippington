@@ -26,8 +26,6 @@ func _ready() -> void:
 			"portal":
 				add_child(Portal.create(obj["pos"], obj["dest"]))
 
-	add_child(Slush.new())
-
 	_spawn_players()
 
 	if multiplayer.is_server():

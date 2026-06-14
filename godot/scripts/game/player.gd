@@ -188,8 +188,6 @@ func _authority_physics(delta: float) -> void:
 		velocity.x = 0.0
 	else:
 		var target_vx := direction * GameConfig.PLAYER_SPEED * player_class.speed_mult
-		if _in_slush():
-			target_vx *= GameConfig.SLUSH_SLOW
 		if _standing_on_ice():
 			# Slide: gradual accel/brake — reversing direction is a commitment.
 			velocity.x = move_toward(velocity.x, target_vx, GameConfig.ICE_ACCEL * delta)
@@ -386,11 +384,6 @@ func try_use_ability() -> void:
 
 func get_cooldown_remaining() -> float:
 	return maxf(0.0, float(_cooldown_until_ms - Time.get_ticks_msec()) / 1000.0)
-
-
-func _in_slush() -> bool:
-	var slush := get_tree().get_first_node_in_group("slush")
-	return slush != null and global_position.y + GameConfig.PLAYER_SIZE / 2.0 > slush.level_y
 
 
 func _standing_on_ice() -> bool:
