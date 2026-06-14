@@ -44,6 +44,15 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# peer_connected fires when a peer is fully connected at the multiplayer
+	# level (all data channels open) — the reliable "connected" signal. We use it
+	# to retire the connect watchdog instead of WebRTCPeerConnection's PC-level
+	# state, which is unreliable on Web (see _process).
+	multiplayer.peer_connected.connect(_on_peer_connected)
+
+
+func _on_peer_connected(peer_id: int) -> void:
+	_connect_deadlines.erase(peer_id)
 
 
 func _process(_delta: float) -> void:
@@ -60,8 +69,13 @@ func _process(_delta: float) -> void:
 		if state == WebRTCPeerConnection.STATE_CONNECTED:
 			_connect_deadlines.erase(peer_id)
 			continue
-		var reported_dead := state == WebRTCPeerConnection.STATE_FAILED \
-				or state == WebRTCPeerConnection.STATE_CLOSED
+		# WebRTCPeerConnection.get_connection_state() is unreliable on the Web
+		# platform: it can report FAILED/CLOSED (and never settle on CONNECTED)
+		# even while the data channels are open and RPCs flow. Treating that as
+		# fatal killed working sessions ~match-start time, so on web we ignore it
+		# and rely on the timeout below plus peer_connected clearing the deadline.
+		var reported_dead := (state == WebRTCPeerConnection.STATE_FAILED \
+				or state == WebRTCPeerConnection.STATE_CLOSED) and not OS.has_feature("web")
 		if reported_dead or now > _connect_deadlines[peer_id]:
 			_connect_deadlines.erase(peer_id)
 			_on_rtc_connect_failed(peer_id, reported_dead)
@@ -263,6 +277,14 @@ func _on_sig_candidate(from_id: int, media: String, index: int, sdp: String) -> 
 
 
 func _on_sig_peer_left(peer_id: int) -> void:
+	# Signaling only brokers connection SETUP. Once a peer is fully connected at
+	# the multiplayer level, its P2P link is independent of signaling — so ignore
+	# a signaling "peer left" for it. Otherwise tearing the signaling room down
+	# (the host closes signaling when the match starts, and the server then tells
+	# every joiner the host left) would drop live game connections mid-match.
+	# Genuine P2P drops are handled by multiplayer.peer_disconnected instead.
+	if peer_id in multiplayer.get_peers():
+		return
 	if _rtc_connections.has(peer_id):
 		_rtc_peer.remove_peer(peer_id)
 		_rtc_connections.erase(peer_id)
