@@ -35,8 +35,9 @@ func _ready() -> void:
 		var code_row := HBoxContainer.new()
 		code_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		code_row.add_theme_constant_override("separation", 16)
-		var code_label := UiTheme.label(NetworkManager.join_code, 48, UiTheme.TEAL)
-		code_row.add_child(code_label)
+		var code_pill := UiTheme.pill(NetworkManager.join_code, 48, UiTheme.INK)
+		(code_pill.get_child(0) as Label).add_theme_font_override("font", UiTheme.FONT_DISPLAY)
+		code_row.add_child(code_pill)
 		var copy_btn := UiTheme.button("COPY")
 		copy_btn.custom_minimum_size = Vector2(110, 44)
 		copy_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -94,6 +95,7 @@ func _ready() -> void:
 		bottom.add_child(_start_btn)
 	else:
 		_ready_btn = UiTheme.button("READY", true)
+		UiTheme._apply_button_instance(_ready_btn, UiTheme.SUN, UiTheme.INK)
 		_ready_btn.pressed.connect(_on_ready_toggled)
 		bottom.add_child(_ready_btn)
 	var leave_btn := UiTheme.button("LEAVE")
@@ -103,6 +105,12 @@ func _ready() -> void:
 
 	GameState.players_changed.connect(_refresh)
 	_refresh()
+
+	var i := 0
+	for child in center.get_children():
+		if child is Control:
+			UiAnim.entrance(child, i)
+			i += 1
 
 
 func _refresh() -> void:
@@ -129,8 +137,10 @@ func _refresh() -> void:
 		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(spacer)
 		row.add_child(UiTheme.label(ClassRegistry.get_class_by_id(p["class_id"]).display_name, 16, Color(1, 1, 1, 0.6)))
-		var ready_text := "READY" if p["ready"] else "..."
-		row.add_child(UiTheme.label(ready_text, 16, UiTheme.TEAL if p["ready"] else Color(1, 1, 1, 0.35)))
+		if p["ready"]:
+			row.add_child(UiTheme.pill("READY", 13, UiTheme.INK, UiTheme.TEAL))
+		else:
+			row.add_child(UiTheme.pill("…", 13, UiTheme.INK, UiTheme.CREAM))
 		_player_list.add_child(row)
 		if not p["ready"]:
 			all_ready = false
