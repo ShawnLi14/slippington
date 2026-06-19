@@ -246,12 +246,18 @@ func _update_class_selection() -> void:
 		var selected: bool = id == _selected_class
 		card.button_pressed = selected
 		var s := StyleBoxFlat.new()
-		s.bg_color = UiTheme.SUN if selected else UiTheme.CREAM
-		s.border_color = UiTheme.INK
-		s.set_border_width_all(3)
+		# Unselected cards use a muted warm cream (NOT near-white), so a
+		# deselected card no longer reads as "going white". The selected card
+		# pops with a SUN fill, a teal accent border and a soft teal glow.
+		s.bg_color = UiTheme.SUN if selected else Color("#e7d8ba")
+		s.border_color = UiTheme.TEAL if selected else UiTheme.INK
+		s.set_border_width_all(4 if selected else 3)
 		s.border_width_bottom = 7
 		s.set_corner_radius_all(14)
 		s.set_content_margin_all(10)
+		if selected:
+			s.shadow_color = Color(UiTheme.TEAL.r, UiTheme.TEAL.g, UiTheme.TEAL.b, 0.55)
+			s.shadow_size = 7
 		for state in ["normal", "hover", "pressed", "focus"]:
 			card.add_theme_stylebox_override(state, s)
 		card.pivot_offset = card.custom_minimum_size / 2.0
