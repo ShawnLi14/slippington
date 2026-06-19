@@ -28,6 +28,15 @@ func _init() -> void:
 			if not t.has_stylebox(state, "Button"):
 				print("FAIL: Button missing %s stylebox" % state); fails += 1
 
+	# bg_art geometry
+	var isle := BgArt.island_silhouette(Vector2(160, 160))
+	if isle.size() < 6:
+		print("FAIL: island silhouette too few points"); fails += 1
+	for p in isle:
+		if p.x < 0.0 or p.x > 160.0 or p.y < 0.0 or p.y > 160.0:
+			print("FAIL: island point out of bounds: %s" % p); fails += 1
+			break
+
 	if fails > 0:
 		print("FAILED: %d issues" % fails); quit(1)
 	else:
