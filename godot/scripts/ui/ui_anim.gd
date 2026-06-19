@@ -2,19 +2,13 @@ class_name UiAnim
 ## Small reusable tweens for party-feel motion. All are no-ops if the node is
 ## invalid, so callers don't need guards.
 
-## Staggered fade + slide-up entrance; call with the child index for stagger.
+## Staggered fade-in entrance; call with the child index for stagger.
+## Fade-only so it is safe inside containers (which manage child positions).
 static func entrance(node: CanvasItem, index := 0) -> void:
-	if node == null: return
+	if node == null:
+		return
 	node.modulate.a = 0.0
-	if node is Control:
-		var c := node as Control
-		var rest := c.position
-		c.position = rest + Vector2(0, 18)
-		var tw := c.create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-		tw.tween_property(c, "position", rest, 0.35).set_delay(0.05 * index)
-		tw.tween_property(c, "modulate:a", 1.0, 0.30).set_delay(0.05 * index)
-	else:
-		node.create_tween().tween_property(node, "modulate:a", 1.0, 0.30)
+	node.create_tween().tween_property(node, "modulate:a", 1.0, 0.30).set_delay(0.05 * index)
 
 
 ## Gentle perpetual idle bob + tilt for the title.
