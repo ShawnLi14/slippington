@@ -33,6 +33,7 @@ func _ready() -> void:
 	UiTheme.anchor_rect(_timer_label, Control.PRESET_CENTER_TOP, Rect2(-100, 16, 200, 48))
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.add_theme_font_size_override("font_size", 40)
+	_timer_label.add_theme_font_override("font", UiTheme.FONT_DISPLAY)
 	_outline(_timer_label, 8)
 	root.add_child(_timer_label)
 
@@ -40,6 +41,7 @@ func _ready() -> void:
 	UiTheme.anchor_rect(_status_label, Control.PRESET_CENTER_TOP, Rect2(-300, 64, 600, 24))
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status_label.add_theme_font_size_override("font_size", 16)
+	_status_label.add_theme_font_override("font", UiTheme.body(600))
 	_status_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
 	_outline(_status_label, 5)
 	root.add_child(_status_label)
@@ -74,6 +76,7 @@ func _ready() -> void:
 	_keycap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_keycap_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_keycap_label.add_theme_font_size_override("font_size", 30)
+	_keycap_label.add_theme_font_override("font", UiTheme.FONT_DISPLAY)
 	_keycap_label.add_theme_color_override("font_color", TEAL)
 	keycap.add_child(_keycap_label)
 
@@ -84,6 +87,7 @@ func _ready() -> void:
 
 	_ability_name = Label.new()
 	_ability_name.add_theme_font_size_override("font_size", 20)
+	_ability_name.add_theme_font_override("font", UiTheme.body(600))
 	_ability_name.add_theme_color_override("font_color", TEAL)
 	vbox.add_child(_ability_name)
 
@@ -104,12 +108,14 @@ func _ready() -> void:
 
 	_ability_status = Label.new()
 	_ability_status.add_theme_font_size_override("font_size", 15)
+	_ability_status.add_theme_font_override("font", UiTheme.body(600))
 	vbox.add_child(_ability_status)
 
 	_flash_label = Label.new()
 	UiTheme.anchor_rect(_flash_label, Control.PRESET_CENTER, Rect2(-300, -120, 600, 80))
 	_flash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_flash_label.add_theme_font_size_override("font_size", 56)
+	_flash_label.add_theme_font_override("font", UiTheme.FONT_DISPLAY)
 	_outline(_flash_label, 10)
 	_flash_label.modulate.a = 0.0
 	root.add_child(_flash_label)
