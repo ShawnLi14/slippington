@@ -73,9 +73,6 @@ static func panel() -> PanelContainer:
 	return p
 
 
-## Anchor a control with a rect expressed relative to the anchor point.
-## (Setting .position after an anchor preset is wrong — position is always
-## parent-relative; offsets are what's anchor-relative.)
 ## The global Theme. Applied once at the root (see main.gd) so every control
 ## inherits the party look and no Godot default styling leaks through.
 static func build_theme() -> Theme:
