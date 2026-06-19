@@ -28,48 +28,65 @@ static func body(weight := 500) -> FontVariation:
 
 
 static func title(text: String, size := 42) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", TEAL)
-	return label
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", FONT_DISPLAY)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", Color.WHITE)
+	l.add_theme_color_override("font_outline_color", INK)
+	l.add_theme_constant_override("outline_size", maxi(6, size / 7))
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
+	l.add_theme_constant_override("shadow_offset_y", 6)
+	return l
 
 
 static func label(text: String, size := 16, color := Color.WHITE) -> Label:
 	var l := Label.new()
 	l.text = text
+	l.add_theme_font_override("font", body(500))
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
 
 
+## accent=true keeps the CORAL primary fill from the Theme; accent=false
+## recolors to neutral CREAM (secondary actions like LEAVE / JOIN-by-default).
 static func button(text: String, accent := false) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(220, 44)
-	b.add_theme_font_size_override("font_size", 18)
-	if accent:
-		var style := StyleBoxFlat.new()
-		style.bg_color = TEAL
-		style.set_corner_radius_all(6)
-		style.set_content_margin_all(10)
-		b.add_theme_stylebox_override("normal", style)
-		var hover := style.duplicate()
-		hover.bg_color = TEAL.lightened(0.15)
-		b.add_theme_stylebox_override("hover", hover)
-		b.add_theme_color_override("font_color", Color("#0f0f1a"))
-		b.add_theme_color_override("font_hover_color", Color("#0f0f1a"))
+	b.custom_minimum_size = Vector2(200, 48)
+	if not accent:
+		_apply_button_instance(b, CREAM, INK)
 	return b
+
+
+## Per-instance recolor (reuses the Theme's geometry via the same builder).
+static func _apply_button_instance(b: Button, fill: Color, fg: Color) -> void:
+	var tmp := Theme.new()
+	_apply_button(tmp, "Button", fill, fg)
+	for s in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(s, tmp.get_stylebox(s, "Button"))
+	b.add_theme_color_override("font_color", fg)
+	b.add_theme_color_override("font_hover_color", fg)
 
 
 static func panel() -> PanelContainer:
 	var p := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL
-	style.set_corner_radius_all(10)
-	style.set_content_margin_all(20)
-	p.add_theme_stylebox_override("panel", style)
+	p.add_theme_stylebox_override("panel", _box(PANEL, Color(1, 1, 1, 0.10), 1, 16))
+	return p
+
+
+static func pill(text: String, size := 14, fg := INK, bg := CREAM) -> PanelContainer:
+	var p := PanelContainer.new()
+	var box := _box(bg, INK, 2, 18)
+	box.content_margin_left = 12; box.content_margin_right = 12
+	box.content_margin_top = 4; box.content_margin_bottom = 5
+	p.add_theme_stylebox_override("panel", box)
+	var l := label(text, size, fg)
+	l.add_theme_font_override("font", body(600))
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(l)
 	return p
 
 
