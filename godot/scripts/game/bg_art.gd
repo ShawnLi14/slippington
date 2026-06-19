@@ -43,38 +43,3 @@ static func island_silhouette(size: Vector2) -> PackedVector2Array:
 	return _scaled(_ROCK, Vector2.ZERO, size)
 
 
-## A jagged snow-capped mountain ridge across [x0,x1] with `peaks` points.
-## Returns nothing; draws ridge + caps + a rim-light line on the lit (left) side.
-static func draw_mountain(ci: CanvasItem, x0: float, x1: float, base_y: float,
-		min_h: float, max_h: float, rock: Color, cap: Color, rim: Color,
-		rng: RandomNumberGenerator) -> void:
-	var pts := PackedVector2Array()
-	pts.append(Vector2(x0, base_y))
-	var n := 5
-	var caps := []
-	for i in n + 1:
-		var x := lerpf(x0, x1, float(i) / float(n))
-		var y := base_y if i == 0 or i == n else base_y - rng.randf_range(min_h, max_h)
-		pts.append(Vector2(x, y))
-		if i != 0 and i != n:
-			caps.append(Vector2(x, y))
-	pts.append(Vector2(x1, base_y))
-	ci.draw_colored_polygon(pts, rock)
-	for peak in caps:  # small snow cap triangle
-		var w := 14.0
-		ci.draw_colored_polygon(PackedVector2Array([
-			peak, peak + Vector2(-w, w * 1.4), peak + Vector2(w, w * 1.4)]), cap)
-	# rim light: trace the lit side of each peak
-	for i in range(1, pts.size() - 1):
-		ci.draw_line(pts[i - 1], pts[i], rim, 2.0, true)
-
-
-## A soft cloud: a cluster of radial-gradient blobs (soft edges via the texture).
-static func draw_cloud(ci: CanvasItem, center: Vector2, scale := 1.0,
-		color := Color(1, 1, 1, 0.9), tex: Texture2D = null) -> void:
-	if tex == null: return
-	var blobs := [Vector2(-40, 6), Vector2(0, -10), Vector2(34, 8), Vector2(-12, 12)]
-	var sizes := [70.0, 95.0, 66.0, 54.0]
-	for i in blobs.size():
-		var d: float = sizes[i] * scale
-		ci.draw_texture_rect(tex, Rect2(center + blobs[i] * scale - Vector2(d, d) / 2, Vector2(d, d)), false, color)

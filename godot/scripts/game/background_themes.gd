@@ -48,7 +48,6 @@ static func sky_islands() -> Dictionary:
 		"island_trunk": Color(0.43, 0.34, 0.26),
 		"island_leaf": Color(0.34, 0.62, 0.40),
 		"island_alpha": 0.55,
-		"tree_density": 1,
 		"haze_color": Color(1.0, 0.89, 0.70, 0.5),
 		"vignette": 0.32,
 		"clouds": true,

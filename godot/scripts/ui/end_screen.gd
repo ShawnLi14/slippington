@@ -67,7 +67,7 @@ func _ready() -> void:
 	panel.add_child(list)
 	center.add_child(panel)
 
-	var row_idx := 0
+	var row_idx := 1
 	for r in GameState.results:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
