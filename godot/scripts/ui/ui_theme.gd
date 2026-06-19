@@ -110,9 +110,7 @@ static func build_theme() -> Theme:
 	t.set_color("caret_color", "LineEdit", INK)
 
 	# PanelContainer — cards/panels.
-	var panel_box := _box(PANEL, Color(1,1,1,0.10), 1, 14)
-	t.set_stylebox("panel", "PanelContainer", panel_box)
-	t.set_stylebox("normal", "PanelContainer", panel_box)
+	t.set_stylebox("panel", "PanelContainer", _box(PANEL, Color(1,1,1,0.10), 1, 14))
 	return t
 
 

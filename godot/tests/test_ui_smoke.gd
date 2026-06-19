@@ -20,9 +20,10 @@ func _init() -> void:
 	else:
 		if t.default_font == null:
 			print("FAIL: theme has no default font"); fails += 1
-		for type in ["Button", "LineEdit", "OptionButton", "PanelContainer"]:
-			if not t.has_stylebox("normal", type):
-				print("FAIL: theme missing normal stylebox for %s" % type); fails += 1
+		var checks := {"Button": "normal", "LineEdit": "normal", "OptionButton": "normal", "PanelContainer": "panel"}
+		for type in checks:
+			if not t.has_stylebox(checks[type], type):
+				print("FAIL: theme missing %s stylebox for %s" % [checks[type], type]); fails += 1
 
 	if fails > 0:
 		print("FAILED: %d issues" % fails); quit(1)
