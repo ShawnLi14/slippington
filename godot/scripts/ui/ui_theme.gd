@@ -70,6 +70,10 @@ static func _apply_button_instance(b: Button, fill: Color, fg: Color) -> void:
 	b.add_theme_color_override("font_color", fg)
 	b.add_theme_color_override("font_hover_color", fg)
 	b.add_theme_color_override("font_pressed_color", fg)
+	# Focused/held states must NOT fall back to the default near-white text,
+	# or a just-clicked light button shows invisible text until you hover it.
+	b.add_theme_color_override("font_focus_color", fg)
+	b.add_theme_color_override("font_hover_pressed_color", fg)
 	b.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.5))
 
 
@@ -154,6 +158,11 @@ static func _apply_button(t: Theme, type: String, fill: Color, fg: Color) -> voi
 	t.set_color("font_color", type, fg)
 	t.set_color("font_hover_color", type, fg)
 	t.set_color("font_pressed_color", type, fg)
+	# Without these two, a focused (just-clicked) or held button falls back to
+	# the default theme's near-white text colour — invisible on our light fills
+	# until the cursor hovers it. (Bites OptionButton selections + COPY etc.)
+	t.set_color("font_focus_color", type, fg)
+	t.set_color("font_hover_pressed_color", type, fg)
 
 
 static func _box(bg: Color, border: Color, bw: int, radius: int) -> StyleBoxFlat:
