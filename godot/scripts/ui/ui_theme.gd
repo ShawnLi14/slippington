@@ -69,6 +69,8 @@ static func _apply_button_instance(b: Button, fill: Color, fg: Color) -> void:
 		b.add_theme_stylebox_override(s, tmp.get_stylebox(s, "Button"))
 	b.add_theme_color_override("font_color", fg)
 	b.add_theme_color_override("font_hover_color", fg)
+	b.add_theme_color_override("font_pressed_color", fg)
+	b.add_theme_color_override("font_disabled_color", Color(fg.r, fg.g, fg.b, 0.5))
 
 
 static func panel() -> PanelContainer:
