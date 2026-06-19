@@ -41,16 +41,10 @@ func _ready() -> void:
 	add_child(center)
 
 	# --- title -----------------------------------------------------------
-	var title := Label.new()
-	title.text = "SLIPPINGTON"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 84)
-	title.add_theme_color_override("font_color", UiTheme.TEAL)
-	title.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.12))
-	title.add_theme_constant_override("outline_size", 16)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
-	title.add_theme_constant_override("shadow_offset_y", 6)
+	var title := UiTheme.title("SLIPPINGTON", 84)
 	center.add_child(title)
+	title.call_deferred("set", "pivot_offset", title.size / 2.0)
+	UiAnim.title_idle.call_deferred(title)
 	var subtitle := UiTheme.label("don't be IT when the clock runs out", 18, Color(1, 1, 1, 0.85))
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.12, 0.8))
@@ -113,6 +107,7 @@ func _ready() -> void:
 	var join_btn := UiTheme.button("JOIN")
 	join_btn.custom_minimum_size = Vector2(120, 44)
 	join_btn.pressed.connect(_on_join_online)
+	UiTheme._apply_button_instance(join_btn, UiTheme.SUN, UiTheme.INK)
 	join_row.add_child(join_btn)
 	center.add_child(join_row)
 	_buttons.append(join_btn)
@@ -179,6 +174,15 @@ func _ready() -> void:
 	lan.add_child(sig_row)
 	center.add_child(_advanced_panel)
 
+	# Staggered entrance: fade children in with a slight delay per element.
+	# VBoxContainer controls child positions, so the position-slide may not
+	# apply; the fade-in is the guaranteed, desired effect.
+	var i := 0
+	for child in center.get_children():
+		if child is Control:
+			UiAnim.entrance(child, i)
+			i += 1
+
 	# Method connections only — lambdas on autoload signals outlive this
 	# screen and crash release builds once it's freed.
 	NetworkManager.session_failed.connect(_on_failed)
@@ -222,15 +226,15 @@ func _make_class_card(player_class: PlayerClass) -> Button:
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(avatar)
 
-	var name_label := UiTheme.label(player_class.display_name.to_upper(), 20)
+	var name_label := UiTheme.label(player_class.display_name.to_upper(), 20, UiTheme.INK)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(name_label)
-	var desc := UiTheme.label(player_class.description, 12, Color(1, 1, 1, 0.6))
+	var desc := UiTheme.label(player_class.description, 12, Color(0.17, 0.14, 0.31, 0.7))
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(190, 0)
 	content.add_child(desc)
-	var ability := UiTheme.label("J · %s" % player_class.primary_ability.display_name, 14, UiTheme.TEAL)
+	var ability := UiTheme.label("J · %s" % player_class.primary_ability.display_name, 14, Color(0.0, 0.45, 0.42))
 	ability.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(ability)
 	return card
@@ -241,17 +245,18 @@ func _update_class_selection() -> void:
 		var card: Button = _class_cards[id]
 		var selected: bool = id == _selected_class
 		card.button_pressed = selected
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.08, 0.1, 0.18, 0.92) if selected else Color(0.06, 0.07, 0.13, 0.78)
-		style.set_corner_radius_all(12)
-		style.set_border_width_all(3 if selected else 1)
-		style.border_color = UiTheme.TEAL if selected else Color(1, 1, 1, 0.12)
-		style.set_content_margin_all(10)
+		var s := StyleBoxFlat.new()
+		s.bg_color = UiTheme.SUN if selected else UiTheme.CREAM
+		s.border_color = UiTheme.INK
+		s.set_border_width_all(3)
+		s.border_width_bottom = 7
+		s.set_corner_radius_all(14)
+		s.set_content_margin_all(10)
 		for state in ["normal", "hover", "pressed", "focus"]:
-			var s := style.duplicate()
-			if state == "hover" and not selected:
-				s.border_color = Color(1, 1, 1, 0.35)
 			card.add_theme_stylebox_override(state, s)
+		card.pivot_offset = card.custom_minimum_size / 2.0
+		card.scale = Vector2(1.06, 1.06) if selected else Vector2.ONE
+		card.rotation = deg_to_rad(-3) if selected else 0.0
 
 
 ## The in-game character, drawn on the card: rounded square + eyes.
