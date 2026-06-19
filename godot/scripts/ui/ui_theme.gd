@@ -6,6 +6,26 @@ const RED := Color("#ff6b6b")
 const BG := Color("#0f0f1a")
 const PANEL := Color("#191b2e")
 
+# --- Playful-Party palette (extends the originals above) ---
+const INK := Color("#2b2350")     # outlines, borders, text-on-light, hard shadows
+const CREAM := Color("#fff7ec")   # card / input fill
+const CORAL := RED                # alias: primary action / danger / IT
+const SUN := Color("#ffd93d")     # secondary accent (JOIN, highlights)
+
+# --- Fonts (bundled, OFL) ---
+const FONT_DISPLAY := preload("res://assets/fonts/LilitaOne-Regular.ttf")
+const _FONT_BODY_SRC := preload("res://assets/fonts/Fredoka-VariableFont_wdth,wght.ttf")
+
+## Fredoka is a variable font; expose weighted instances. Cached so we build each once.
+static var _body_cache := {}
+static func body(weight := 500) -> FontVariation:
+	if not _body_cache.has(weight):
+		var fv := FontVariation.new()
+		fv.base_font = _FONT_BODY_SRC
+		fv.variation_opentype = {"wght": float(weight)}
+		_body_cache[weight] = fv
+	return _body_cache[weight]
+
 
 static func title(text: String, size := 42) -> Label:
 	var label := Label.new()
