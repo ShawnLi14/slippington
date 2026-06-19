@@ -24,6 +24,9 @@ func _init() -> void:
 		for type in checks:
 			if not t.has_stylebox(checks[type], type):
 				print("FAIL: theme missing %s stylebox for %s" % [checks[type], type]); fails += 1
+		for state in ["hover", "pressed", "disabled"]:
+			if not t.has_stylebox(state, "Button"):
+				print("FAIL: Button missing %s stylebox" % state); fails += 1
 
 	if fails > 0:
 		print("FAILED: %d issues" % fails); quit(1)

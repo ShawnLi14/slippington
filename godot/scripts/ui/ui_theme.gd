@@ -131,7 +131,7 @@ static func _apply_button(t: Theme, type: String, fill: Color, fg: Color) -> voi
 	t.set_stylebox("hover", type, hover)
 	t.set_stylebox("pressed", type, pressed)
 	t.set_stylebox("disabled", type, disabled)
-	t.set_stylebox("focus", type, hover)
+	t.set_stylebox("focus", type, hover.duplicate())
 	t.set_color("font_color", type, fg)
 	t.set_color("font_hover_color", type, fg)
 	t.set_color("font_pressed_color", type, fg)
