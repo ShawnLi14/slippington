@@ -34,6 +34,8 @@ func _ready() -> void:
 	if bg_theme.get("clouds", false):
 		_build_clouds(rng)
 	_build_particles()
+	_build_haze()
+	_build_vignette()
 
 
 func _build_sky() -> void:
@@ -108,6 +110,7 @@ func _mountain_layer(rng: RandomNumberGenerator, base_y: float, h_min: float,
 		}
 		if capped:
 			e["cap_color"] = bg_theme["cap_color"]
+			e["rim_color"] = bg_theme.get("rim_color", Color(1, 1, 1, 0.4))
 		layer.elements.append(e)
 	return layer
 
@@ -125,9 +128,12 @@ func _island_layer(rng: RandomNumberGenerator) -> BgLayer:
 			"x": -150.0 + step * i + rng.randf_range(-50.0, 50.0),
 			"y": rng.randf_range(180.0, 600.0),
 			"w": rng.randf_range(120.0, 250.0),
-			"color": bg_theme["silhouette_color"],
-			"top_color": bg_theme["island_top_color"],
+			"color": bg_theme.get("island_rock", bg_theme.get("silhouette_color", Color(0.4, 0.5, 0.66))),
+			"top_color": bg_theme.get("island_grass", bg_theme.get("island_top_color", Color(0.55, 0.74, 0.55))),
+			"trunk_color": bg_theme.get("island_trunk", Color(0.43, 0.34, 0.26)),
+			"leaf_color": bg_theme.get("island_leaf", Color(0.34, 0.62, 0.40)),
 		})
+	layer.self_modulate.a = bg_theme.get("island_alpha", 0.55)
 	return layer
 
 
@@ -189,6 +195,56 @@ func _add_particles(amount: int, lifetime: float, pos: Vector2, extents: Vector2
 	p.scale_amount_max = smax
 	p.color = bg_theme.get("particle_color", Color.WHITE)
 	add_child(p)
+
+
+## Atmospheric haze rising from the bottom: fades the distant silhouette bases
+## into the horizon. A bottom-wide gradient (transparent at top -> theme colour
+## at the floor), added after the silhouettes so it sits over them.
+func _build_haze() -> void:
+	var col: Color = bg_theme.get("haze_color", Color(1, 1, 1, 0))
+	if col.a <= 0.0:
+		return
+	var grad := Gradient.new()
+	grad.set_color(0, Color(col.r, col.g, col.b, 0.0))
+	grad.set_color(1, col)
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill_from = Vector2(0, 0)
+	tex.fill_to = Vector2(0, 1)
+	tex.width = 8
+	tex.height = 256
+	var r := TextureRect.new()
+	r.texture = tex
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	r.offset_top = -MAP_H * 0.45
+	r.offset_bottom = 0
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(r)
+
+
+## Radial vignette darkening the corners to fake depth-of-field under
+## gl_compatibility (no real bloom/glow). Added last so it overlays everything.
+func _build_vignette() -> void:
+	var strength: float = bg_theme.get("vignette", 0.0)
+	if strength <= 0.0:
+		return
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0, 0, 0, 0.0))
+	grad.set_color(1, Color(0, 0, 0, strength))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.95, 0.95)
+	tex.width = 256
+	tex.height = 256
+	var r := TextureRect.new()
+	r.texture = tex
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(r)
 
 
 ## White core fading to transparent — used for the sun glow and soft particles.

@@ -50,6 +50,8 @@ func _draw_mountain(e: Dictionary) -> void:
 		draw_colored_polygon(PackedVector2Array([
 			peak, peak.lerp(left, f), peak.lerp(right, f),
 		]), e["cap_color"])
+	if e.has("rim_color"):
+		draw_line(left, peak, e["rim_color"], 2.0, true)
 
 
 # --- clouds ---------------------------------------------------------------------
@@ -93,113 +95,11 @@ func _draw_cloud(e: Dictionary) -> void:
 
 # --- floating islands -------------------------------------------------------------
 
-func _ensure_island_detail(e: Dictionary) -> void:
-	if e.has("under_pts"):
-		return
-	var rng := RandomNumberGenerator.new()
-	rng.seed = e.get("seed", 1)
-	var w: float = e["w"]
-	# Jagged rocky underside: irregular polygon from the rim down to a tip.
-	var depth := w * rng.randf_range(0.7, 0.95)
-	var tip_x := w * rng.randf_range(0.42, 0.58)
-	var pts := PackedVector2Array()
-	pts.append(Vector2(0, 0))
-	var steps := 7
-	for i in range(1, steps):
-		var t := float(i) / float(steps)
-		# Stair-step jaggedness: alternate pulling points in/out so the rock
-		# edge reads as cut stone instead of a smooth cone.
-		var jag := w * 0.09 * (1.0 if i % 2 == 0 else -0.4) * rng.randf_range(0.6, 1.2)
-		# Keep each chain on its own side of the tip so the outline stays a
-		# simple polygon (crossing chains fail triangulation).
-		var px := clampf(lerpf(0.0, tip_x, pow(t, 0.8)) + jag, -w * 0.06, tip_x - w * 0.03)
-		var py := depth * pow(t, 1.5) * rng.randf_range(0.9, 1.0)
-		pts.append(Vector2(px, py))
-	pts.append(Vector2(tip_x, depth))
-	for i in range(steps - 1, 0, -1):
-		var t := float(i) / float(steps)
-		var jag := w * 0.09 * (1.0 if i % 2 == 0 else -0.4) * rng.randf_range(0.6, 1.2)
-		var px := clampf(lerpf(w, tip_x, pow(t, 0.8)) - jag, tip_x + w * 0.03, w * 1.06)
-		var py := depth * pow(t, 1.5) * rng.randf_range(0.9, 1.0)
-		pts.append(Vector2(px, py))
-	pts.append(Vector2(w, 0))
-	e["under_pts"] = pts
-	e["depth"] = depth
-	e["tip_x"] = tip_x
-	# Grass drips: lobes hanging over the rim.
-	var drips: Array = []
-	var drip_count := rng.randi_range(4, 6)
-	for i in drip_count:
-		drips.append({
-			"x": w * (0.08 + 0.84 * float(i) / float(drip_count - 1)) + rng.randf_range(-w * 0.03, w * 0.03),
-			"r": w * rng.randf_range(0.045, 0.08),
-		})
-	e["drips"] = drips
-	# A small tree or two on top.
-	var trees: Array = []
-	for i in rng.randi_range(1, 2):
-		trees.append({
-			"x": w * rng.randf_range(0.2, 0.8),
-			"h": w * rng.randf_range(0.16, 0.24),
-			"r": w * rng.randf_range(0.08, 0.13),
-		})
-	e["trees"] = trees
-	# Detached rock chunks floating beneath the tip.
-	var chunks: Array = []
-	for i in rng.randi_range(1, 3):
-		chunks.append({
-			"o": Vector2(tip_x + rng.randf_range(-w * 0.2, w * 0.2),
-				depth + w * (0.12 + 0.14 * float(i))),
-			"r": w * rng.randf_range(0.03, 0.07) * (1.0 - 0.2 * float(i)),
-		})
-	e["chunks"] = chunks
-
-
 func _draw_island(e: Dictionary) -> void:
-	_ensure_island_detail(e)
 	var origin := Vector2(e["x"], e["y"])
-	var w: float = e["w"]
-	var rock: Color = e["color"]
-	var grass: Color = e["top_color"]
-	var rock_dark := rock.darkened(0.25)
-	var grass_dark := grass.darkened(0.2)
-
-	# Rocky underside (jagged polygon), with a darker core toward the tip:
-	# the same silhouette scaled about the tip point, so the strata follow
-	# the rock's own shape.
-	var pts: PackedVector2Array = e["under_pts"]
-	var moved := PackedVector2Array()
-	for p in pts:
-		moved.append(origin + p)
-	draw_colored_polygon(moved, rock)
-	var tip := Vector2(e["tip_x"], e["depth"])
-	var core := PackedVector2Array()
-	for p in pts:
-		core.append(origin + tip + (p - tip) * 0.62)
-	draw_colored_polygon(core, rock_dark)
-
-	# Floating rock chunks under the tip.
-	for chunk in e["chunks"]:
-		draw_circle(origin + chunk["o"], chunk["r"], rock_dark)
-
-	# Grass cap: dark rim ellipse, drips over the edge, lighter top surface.
-	draw_colored_polygon(_ellipse(origin + Vector2(w * 0.5, 2.0), w * 0.54, w * 0.13), grass_dark)
-	for drip in e["drips"]:
-		draw_circle(origin + Vector2(drip["x"], 4.0), drip["r"], grass_dark)
-	draw_colored_polygon(_ellipse(origin + Vector2(w * 0.5, -4.0), w * 0.52, w * 0.11), grass)
-
-	# Trees: trunk + two-tone foliage blobs.
-	for tree in e["trees"]:
-		var base := origin + Vector2(tree["x"], -6.0)
-		draw_rect(Rect2(base + Vector2(-tree["r"] * 0.12, -tree["h"]), Vector2(tree["r"] * 0.24, tree["h"])), rock_dark)
-		draw_circle(base + Vector2(0, -tree["h"]), tree["r"], grass_dark)
-		draw_circle(base + Vector2(-tree["r"] * 0.4, -tree["h"] - tree["r"] * 0.35), tree["r"] * 0.7, grass)
-		draw_circle(base + Vector2(tree["r"] * 0.45, -tree["h"] - tree["r"] * 0.25), tree["r"] * 0.6, grass)
-
-
-func _ellipse(center: Vector2, rx: float, ry: float, segments := 24) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in segments:
-		var a := TAU * float(i) / float(segments)
-		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
-	return pts
+	var sz := Vector2(e["w"], e["w"])
+	BgArt.draw_island(self, origin, sz,
+		e["color"],                                   # rock
+		e["top_color"],                               # grass
+		e.get("trunk_color", Color(0.43, 0.34, 0.26)),
+		e.get("leaf_color", (e["top_color"] as Color).darkened(0.2)))
