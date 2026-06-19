@@ -13,6 +13,9 @@ next-env.d.ts
 # godot exports (editor cache is ignored by godot/.gitignore)
 godot/export/
 
+# brainstorming visual companion (local mockups)
+.superpowers/
+
 # misc
 .DS_Store
 *.pem
