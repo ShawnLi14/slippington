@@ -8,6 +8,7 @@ var _host_warning: CanvasLayer
 
 
 func _ready() -> void:
+	theme = UiTheme.build_theme()  # propagates to every screen we swap in
 	GameState.phase_changed.connect(_on_phase_changed)
 	_show_for_phase(GameState.phase)
 	for arg in OS.get_cmdline_user_args():
