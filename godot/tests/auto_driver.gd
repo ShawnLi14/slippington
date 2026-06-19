@@ -181,6 +181,24 @@ func _ready() -> void:
 			GameState.players_changed.emit()
 			_take_screenshot(1.0)
 			return
+		"shot-end":
+			_done = true  # prevent _physics_process from calling _finish() early
+			NetworkManager.is_host = true
+			GameState.results = [
+				{"peer_id": 1, "name": "You", "color_index": 0, "time_as_it": 3.2, "was_it_at_end": false},
+				{"peer_id": 2, "name": "Maya", "color_index": 1, "time_as_it": 7.8, "was_it_at_end": true},
+				{"peer_id": 3, "name": "Sam", "color_index": 2, "time_as_it": 5.1, "was_it_at_end": false},
+			]
+			GameState.rounds_total = 1
+			GameState.end_match(GameState.results, {
+				"points": {},
+				"number": 1,
+				"total": 1,
+				"final": true,
+				"champion": -1,
+			})
+			_take_screenshot(1.0)
+			return
 		"shot-practice":
 			GameState.local_name = "You"
 			GameState.start_practice()

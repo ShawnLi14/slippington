@@ -32,10 +32,20 @@ func _ready() -> void:
 		if not i_won:
 			title.add_theme_color_override("font_color", Color.WHITE)
 		center.add_child(title)
+		UiAnim.entrance(title, 0)
+		title.pivot_offset = title.size / 2.0
+		title.scale = Vector2(0.6, 0.6)
+		title.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT) \
+			.tween_property(title, "scale", Vector2.ONE, 0.4)
 	elif is_series:
 		var round_title := UiTheme.title("ROUND %d / %d" % [GameState.round_number, GameState.rounds_total], 40)
 		round_title.add_theme_color_override("font_color", UiTheme.RED if i_lost else UiTheme.TEAL)
 		center.add_child(round_title)
+		UiAnim.entrance(round_title, 0)
+		round_title.pivot_offset = round_title.size / 2.0
+		round_title.scale = Vector2(0.6, 0.6)
+		round_title.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT) \
+			.tween_property(round_title, "scale", Vector2.ONE, 0.4)
 		var sub := UiTheme.label("caught! no point this round" if i_lost else "survived — +1 point", 17, Color(1, 1, 1, 0.8))
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		center.add_child(sub)
@@ -44,6 +54,11 @@ func _ready() -> void:
 		if i_lost:
 			title.add_theme_color_override("font_color", UiTheme.RED)
 		center.add_child(title)
+		UiAnim.entrance(title, 0)
+		title.pivot_offset = title.size / 2.0
+		title.scale = Vector2(0.6, 0.6)
+		title.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT) \
+			.tween_property(title, "scale", Vector2.ONE, 0.4)
 
 	var panel := UiTheme.panel()
 	var list := VBoxContainer.new()
@@ -52,6 +67,7 @@ func _ready() -> void:
 	panel.add_child(list)
 	center.add_child(panel)
 
+	var row_idx := 0
 	for r in GameState.results:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
@@ -71,10 +87,12 @@ func _ready() -> void:
 			var pts: int = GameState.round_points.get(r["peer_id"], 0)
 			row.add_child(UiTheme.label("%d pt%s" % [pts, "" if pts == 1 else "s"], 18, UiTheme.TEAL))
 		if r["was_it_at_end"]:
-			row.add_child(UiTheme.label("CAUGHT", 16, UiTheme.RED))
+			row.add_child(UiTheme.pill("CAUGHT", 13, Color.WHITE, UiTheme.CORAL))
 		else:
-			row.add_child(UiTheme.label("SAFE", 16, UiTheme.TEAL))
+			row.add_child(UiTheme.pill("SAFE", 13, UiTheme.INK, UiTheme.TEAL))
 		list.add_child(row)
+		UiAnim.entrance(row, row_idx)
+		row_idx += 1
 
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 12)
@@ -95,3 +113,4 @@ func _ready() -> void:
 	)
 	bottom.add_child(leave)
 	center.add_child(bottom)
+	UiAnim.entrance(bottom, row_idx)
