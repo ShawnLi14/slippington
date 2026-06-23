@@ -11,6 +11,7 @@ func _init() -> void:
 	failures += _check("some seed produces a vertical mover", _test_gen_has_ymover())
 	failures += _check("phase platform is not a blocker", _test_phase_nonblocking())
 	failures += _check("phase platform is a landable surface", _test_phase_landable())
+	failures += _check("some seed produces a phase platform", _test_gen_has_phase())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -61,3 +62,11 @@ func _test_phase_landable() -> bool:
 	var ph := {"rect": Rect2(400, 500, 180, 16), "type": "solid", "phase": {"period": 2.0, "duty": 0.5, "offset": 0.0}}
 	var m := {"width": 1920, "height": 1080, "platforms": [ph], "objects": []}
 	return MapPlanner._surfaces(m).has(ph)
+
+func _test_gen_has_phase() -> bool:
+	for s in 80:
+		var m := MapGenerator.generate("a2-%d" % s)
+		for p in m["platforms"]:
+			if p.has("phase"):
+				return true
+	return false

@@ -27,6 +27,8 @@ const RAMP_CHANCE := 0.16
 const BEND_CHANCE := 0.18
 ## Chance a flat solid connector becomes a conveyor belt.
 const CONVEYOR_CHANCE := 0.12
+## Chance a thru connector becomes a clocked phase platform instead.
+const PHASE_CHANCE := 0.12
 ## Landmarks occupy the band between the ground and this height; connector
 ## platforms fill everything above it.
 const LANDMARK_TOP := 640.0
@@ -159,6 +161,9 @@ static func generate(seed_string: String) -> Dictionary:
 				platform = {"rect": Rect2(x, y, p_width, r_rise + PLATFORM_HEIGHT), "type": p_type, "ramp": r_dir}
 			else:
 				platform = {"rect": rect, "type": p_type, "thru": thru}
+				if thru and rng.next() < PHASE_CHANCE:
+					platform = {"rect": rect, "type": p_type,
+						"phase": {"period": rng.next_float(1.6, 2.6), "duty": rng.next_float(0.45, 0.6), "offset": rng.next_float(0.0, 2.0)}}
 			platforms.append(platform)
 			layer_platforms.append(platform)
 
