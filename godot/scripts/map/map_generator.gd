@@ -25,6 +25,8 @@ const ICE_CHANCE := 0.15
 ## for a flat to grow a bent ramp off one end (an L-shape).
 const RAMP_CHANCE := 0.16
 const BEND_CHANCE := 0.18
+## Chance a flat solid connector becomes a conveyor belt.
+const CONVEYOR_CHANCE := 0.12
 ## Landmarks occupy the band between the ground and this height; connector
 ## platforms fill everything above it.
 const LANDMARK_TOP := 640.0
@@ -159,6 +161,14 @@ static func generate(seed_string: String) -> Dictionary:
 				platform = {"rect": rect, "type": p_type, "thru": thru}
 			platforms.append(platform)
 			layer_platforms.append(platform)
+
+			# Salt a conveyor onto eligible flats (solid, non-thru, non-ramp).
+			if not platform.has("ramp") and not platform.get("thru", false) \
+					and platform["type"] == "solid" and rng.next() < CONVEYOR_CHANCE:
+				platform["conveyor"] = {
+					"dir": 1 if rng.next() < 0.5 else -1,
+					"speed": rng.next_float(90.0, 150.0),
+				}
 
 			# Bent end: a flat can grow a ramp off one side (an L-shape), if
 			# it stays inside the border gap and clear of everything else.
