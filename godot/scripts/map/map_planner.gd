@@ -112,12 +112,15 @@ static func _surfaces(map: Dictionary) -> Array:
 
 
 static func _blockers(map: Dictionary) -> Array[Rect2]:
-	# Anything you can't pass through blocks movement arcs; "thru" variants
-	# (one-way platforms of any material) do not.
+	# Anything you can't pass through blocks movement arcs. "thru" variants,
+	# phase platforms (open part of every cycle), and pinch-pair movers (the
+	# gap opens every cycle) are timing elements you can always wait out, so
+	# they must never sever a route — exclude them from blockers.
 	var out: Array[Rect2] = []
 	for p in map["platforms"]:
-		if not p.get("thru", false):
-			out.append(_sweep_rect(p).grow(BLOCK_INFLATE))
+		if p.get("thru", false) or p.has("phase") or p.get("move", {}).has("pinch"):
+			continue
+		out.append(_sweep_rect(p).grow(BLOCK_INFLATE))
 	return out
 
 

@@ -9,6 +9,8 @@ func _init() -> void:
 	failures += _check("generation stays sound with conveyors", _test_gen_sound())
 	failures += _check("some seed produces a conveyor", _test_gen_has_conveyor())
 	failures += _check("some seed produces a vertical mover", _test_gen_has_ymover())
+	failures += _check("phase platform is not a blocker", _test_phase_nonblocking())
+	failures += _check("phase platform is a landable surface", _test_phase_landable())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -43,3 +45,19 @@ func _test_gen_has_ymover() -> bool:
 			if p.get("move", {}).get("axis", "x") == "y":
 				return true
 	return false
+
+func _test_phase_nonblocking() -> bool:
+	# A phase platform must NOT appear among the planner's blocker rects.
+	var ph := {"rect": Rect2(400, 500, 180, 16), "type": "solid", "phase": {"period": 2.0, "duty": 0.5, "offset": 0.0}}
+	var m := {"width": 1920, "height": 1080, "platforms": [
+		{"rect": Rect2(0, 1060, 1920, 20), "type": "solid"}, ph], "objects": []}
+	for b in MapPlanner._blockers(m):
+		if b.position.distance_to(Rect2(400, 500, 180, 16).grow(10.0).position) < 1.0:
+			return false  # phase platform leaked into blockers
+	return true
+
+func _test_phase_landable() -> bool:
+	# A phase platform is a non-wall surface, so it must be in _surfaces.
+	var ph := {"rect": Rect2(400, 500, 180, 16), "type": "solid", "phase": {"period": 2.0, "duty": 0.5, "offset": 0.0}}
+	var m := {"width": 1920, "height": 1080, "platforms": [ph], "objects": []}
+	return MapPlanner._surfaces(m).has(ph)
