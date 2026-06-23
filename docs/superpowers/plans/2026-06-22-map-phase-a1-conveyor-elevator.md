@@ -18,6 +18,7 @@ Every task implicitly includes these (copied from the spec):
 - **Determinism.** Elements are driven ONLY by static geometry or the already-synced `GameState.world_clock`. Apply per-element effects ONLY to `is_multiplayer_authority()` pawns (the spring/portal pattern). Never trigger off local contact-time or `Time.get_ticks` for gameplay state. Nothing about these elements is sent over the network.
 - **Planner stays conservative.** Plans at `SPEED=270` (runtime is 330). New elements must never make a map claim a reach it lacks, nor let a sometimes-open element block an arc.
 - **Determinism check holds going forward.** Adding elements shifts the seeded RNG stream, so existing seeds reroll to new maps — accepted. But same-seed-same-map must still hold after each change.
+- **Headless test limitation (important).** Under `--script` SceneTree mode the autoload singletons (`GameState`, etc.) are NOT loaded, so any `class_name` script that references an autoload — including `PlatformBody` and `Player` — fails to COMPILE when instantiated in a test and cannot be unit-tested by instantiation. Only autoload-free `class_name` classes (`MapGenerator`, `MapPlanner`, `SeededRng`, `GameConfig`) are headless-testable. Test new data/generation logic through those; verify node/runtime changes via the `--auto` integration modes and a clean project import.
 - **Toolchain.** Godot binary: `$LOCALAPPDATA/Programs/Godot/Godot_v4.4.1-stable_win64_console.exe` (call it `$GODOT`). After adding/renaming any `class_name` script or test, reimport first: `"$GODOT" --headless --path godot --import`. Run a headless test: `"$GODOT" --headless --path godot --script res://tests/<file>.gd`.
 
 ---
@@ -26,59 +27,13 @@ Every task implicitly includes these (copied from the spec):
 
 **Files:**
 - Modify: `godot/scripts/game/platform_body.gd` (add field in `create`, draw chevrons in `_draw`)
-- Create: `godot/tests/test_elements.gd`
 
 **Interfaces:**
 - Produces: `PlatformBody.conveyor: Dictionary` — `{"dir": int (±1), "speed": float}` when the platform is a belt, else `{}`. Populated from `data.get("conveyor", {})`. Later tasks (Player) read `collider.conveyor`.
 
-- [ ] **Step 1: Write the failing test**
+**Testing note:** `PlatformBody` references the `GameState` autoload in `_physics_process`, so it CANNOT be instantiated under headless `--script` mode (see Global Constraints). The `conveyor` field is a pure transcription assignment — its data shape is covered by the generator test in Task 3 (pure dicts, no node instantiation) and its runtime effect by the integration run in Task 2. Task 1 is verified by a clean project import.
 
-Create `godot/tests/test_elements.gd`:
-
-```gdscript
-extends SceneTree
-## Phase-A element unit tests (headless):
-##   godot --headless --path . --script res://tests/test_elements.gd
-
-func _init() -> void:
-	var failures := 0
-	failures += _check("conveyor field round-trips", _test_conveyor_field())
-	failures += _check("plain platform has empty conveyor", _test_plain_conveyor())
-	if failures > 0:
-		print("FAILED: %d test(s)" % failures)
-		quit(1)
-		return
-	print("DONE: elements ok")
-	quit(0)
-
-func _check(name: String, ok: bool) -> int:
-	print(("PASS " if ok else "FAIL ") + name)
-	return 0 if ok else 1
-
-func _test_conveyor_field() -> bool:
-	var p := PlatformBody.create({"rect": Rect2(0, 0, 180, 16), "type": "solid",
-		"conveyor": {"dir": -1, "speed": 120.0}})
-	var ok := p.conveyor.get("dir", 0) == -1 and is_equal_approx(p.conveyor.get("speed", 0.0), 120.0)
-	p.free()
-	return ok
-
-func _test_plain_conveyor() -> bool:
-	var p := PlatformBody.create({"rect": Rect2(0, 0, 180, 16), "type": "solid"})
-	var ok := p.conveyor.is_empty()
-	p.free()
-	return ok
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run:
-```bash
-"$GODOT" --headless --path godot --import
-"$GODOT" --headless --path godot --script res://tests/test_elements.gd
-```
-Expected: FAIL — `Invalid get index 'conveyor'` (the field doesn't exist yet).
-
-- [ ] **Step 3: Add the field and rendering**
+- [ ] **Step 1: Add the field and rendering**
 
 In `godot/scripts/game/platform_body.gd`, add the field next to the others (after `var move_data` on line 17):
 
@@ -92,7 +47,7 @@ In `create()`, after `p.move_data = data.get("move", {})`:
 	p.conveyor = data.get("conveyor", {})
 ```
 
-In `_draw()`, just before the final `if type == "ice":` glint block (i.e., right after the flat-platform `draw_line(...edge...)` in the non-thru branch), add belt chevrons so direction reads at a glance:
+In `_draw()`, just before the final `if type == "ice":` glint block (i.e., right after the flat-platform non-thru `draw_line(...edge...)` and at the same indent level as the `if thru:` / `else:` pair, so it runs regardless of thru), add belt chevrons so direction reads at a glance:
 
 ```gdscript
 	if not conveyor.is_empty():
@@ -105,21 +60,20 @@ In `_draw()`, just before the final `if type == "ice":` glint block (i.e., right
 			cx += 22.0
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [ ] **Step 2: Verify the project imports cleanly**
 
 Run:
 ```bash
-"$GODOT" --headless --path godot --script res://tests/test_elements.gd
+"$GODOT" --headless --path godot --import 2>&1 | grep -iE "SCRIPT ERROR|Parse Error|ERROR at" || echo "IMPORT CLEAN"
 ```
-Expected: `PASS conveyor field round-trips`, `PASS plain platform has empty conveyor`, `DONE: elements ok`.
+Expected: `IMPORT CLEAN` — no parse/script errors introduced by the new field or draw code.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add godot/scripts/game/platform_body.gd godot/tests/test_elements.gd godot/tests/test_elements.gd.uid
+git add godot/scripts/game/platform_body.gd
 git commit -m "Conveyor: PlatformBody field + belt chevrons"
 ```
-(If the `.uid` file isn't generated yet, run the `--import` command first, then add it.)
 
 ---
 
@@ -132,7 +86,7 @@ git commit -m "Conveyor: PlatformBody field + belt chevrons"
 - Consumes: `PlatformBody.conveyor` (Task 1).
 - Produces: `Player._standing_on_conveyor() -> Dictionary` — the belt under the player's feet, or `{}`.
 
-This is runtime physics (floor + slide collisions), verified by an integration run rather than a headless unit test — there is no floor/physics in `--script` mode.
+This is runtime physics (floor + slide collisions); `Player` references autoloads, so it is verified by a clean import + the `--auto` integration smoke (no regression), NOT a headless unit test. The belt-drift visual confirmation happens at the Task 5 gate, once Task 3 actually generates belts.
 
 - [ ] **Step 1: Add the detector (mirrors `_standing_on_ice`)**
 
@@ -152,7 +106,7 @@ func _standing_on_conveyor() -> Dictionary:
 
 - [ ] **Step 2: Apply the belt in `_authority_physics`**
 
-In the `else` branch of the movement block (the not-dashing/not-stunned case), right after the ice/solid `velocity.x` assignment closes (after line 205, before the `if direction > 0.0` facing block on line 206), add:
+In the `else` branch of the movement block (the not-dashing/not-stunned case), right after the ice/solid `velocity.x` assignment closes (after line 205, before the `if direction > 0.0` facing block on line 206), add (note: 3 tabs of indent — it sits inside that `else`):
 
 ```gdscript
 			var belt := _standing_on_conveyor()
@@ -160,20 +114,20 @@ In the `else` branch of the movement block (the not-dashing/not-stunned case), r
 				velocity.x += float(belt["dir"]) * belt["speed"]
 ```
 
-(The belt is additive on top of input each frame — run with it for a boost, against it and you crawl, stand still and you drift. It is re-applied every physics frame, not accumulated.)
+(The belt is additive on top of input each frame — run with it for a boost, against it and you crawl, stand still and you drift. Re-applied every physics frame, not accumulated.)
 
-- [ ] **Step 3: Verify with an integration run**
-
-Until Task 3 places belts via generation, force one by temporarily adding a conveyor platform. The lowest-friction check: after Task 3 lands, run the standard host/join smoke and confirm no regression; for the belt itself, run the game with a known conveyor seed and watch a still player drift. Acceptance: a player standing (no input) on a conveyor visibly slides in `dir` at roughly `speed` px/s, and the existing host/join auto modes still pass:
+- [ ] **Step 3: Verify import + integration smoke**
 
 ```bash
+"$GODOT" --headless --path godot --import 2>&1 | grep -iE "SCRIPT ERROR|Parse Error|ERROR at" || echo "IMPORT CLEAN"
+rm -f /tmp/h_a1.log /tmp/j_a1.log
 "$GODOT" --headless --path godot -- --auto=host --port=9991 --match-seconds=8 > /tmp/h_a1.log 2>&1 &
 sleep 1
 "$GODOT" --headless --path godot -- --auto=join --port=9991 > /tmp/j_a1.log 2>&1
 wait
 grep -iE "ALL CHECKS|FAIL" /tmp/h_a1.log /tmp/j_a1.log
 ```
-Expected: `ALL CHECKS PASSED` on both.
+Expected: `IMPORT CLEAN`, and `ALL CHECKS PASSED` on both host and join (the belt code path compiles and causes no movement/tag regression; belts aren't generated yet, so this is a no-regression gate).
 
 - [ ] **Step 4: Commit**
 
@@ -184,28 +138,42 @@ git commit -m "Conveyor: player belt force (run-with boost, run-against crawl)"
 
 ---
 
-### Task 3: Generator salts conveyors onto connector platforms
+### Task 3: Generator salts conveyors + the element test suite
 
 **Files:**
 - Modify: `godot/scripts/map/map_generator.gd` (add `CONVEYOR_CHANCE`, tag some connector flats)
-- Modify: `godot/tests/test_elements.gd` (add a generation-soundness + coverage test)
+- Create: `godot/tests/test_elements.gd` (generation-soundness + coverage tests — pure dicts, no node instantiation)
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: maps whose `platforms` may carry a `conveyor` dict on flat, solid, non-thru connectors.
+- Produces: maps whose `platforms` may carry a `conveyor` dict on flat, solid, non-thru connectors. Establishes `tests/test_elements.gd`, extended by Task 4.
 
 - [ ] **Step 1: Write the failing test**
 
-Add these to `godot/tests/test_elements.gd` — register them in `_init` (after the existing two `_check` lines):
+Create `godot/tests/test_elements.gd` (uses only `MapGenerator`/`MapPlanner` — pure `class_name` classes with no autoload dependency, so they run headless):
 
 ```gdscript
+extends SceneTree
+## Phase-A element unit tests (headless):
+##   godot --headless --path . --script res://tests/test_elements.gd
+## These exercise the autoload-free generation/planner layer only — node
+## classes like PlatformBody/Player can't be instantiated under --script.
+
+func _init() -> void:
+	var failures := 0
 	failures += _check("generation stays sound with conveyors", _test_gen_sound())
 	failures += _check("some seed produces a conveyor", _test_gen_has_conveyor())
-```
+	if failures > 0:
+		print("FAILED: %d test(s)" % failures)
+		quit(1)
+		return
+	print("DONE: elements ok")
+	quit(0)
 
-And add the methods:
+func _check(name: String, ok: bool) -> int:
+	print(("PASS " if ok else "FAIL ") + name)
+	return 0 if ok else 1
 
-```gdscript
 func _test_gen_sound() -> bool:
 	for s in 30:
 		var m := MapGenerator.generate("a1-%d" % s)
@@ -227,9 +195,10 @@ func _test_gen_has_conveyor() -> bool:
 
 Run:
 ```bash
+"$GODOT" --headless --path godot --import
 "$GODOT" --headless --path godot --script res://tests/test_elements.gd
 ```
-Expected: `PASS generation stays sound with conveyors` (already sound), `FAIL some seed produces a conveyor` (no belts generated yet).
+Expected: `PASS generation stays sound with conveyors` (already sound), `FAIL some seed produces a conveyor` (no belts generated yet), `FAILED: 1 test(s)`.
 
 - [ ] **Step 3: Add conveyor salting to the connector loop**
 
@@ -240,7 +209,7 @@ In `godot/scripts/map/map_generator.gd`, add the constant near the other connect
 const CONVEYOR_CHANCE := 0.12
 ```
 
-In the connector loop, right after a flat platform is appended to `layer_platforms` — i.e., after the `else: platform = {"rect": rect, "type": p_type, "thru": thru}` branch and its `platforms.append(platform); layer_platforms.append(platform)` (after line 161) — add:
+In the connector loop, right after a flat platform is appended to `layer_platforms` — i.e., after the `else: platform = {"rect": rect, "type": p_type, "thru": thru}` branch and its `platforms.append(platform); layer_platforms.append(platform)` (after line 161) — add (4 tabs of indent, matching the loop body):
 
 ```gdscript
 			# Salt a conveyor onto eligible flats (solid, non-thru, non-ramp).
@@ -258,13 +227,13 @@ Run:
 ```bash
 "$GODOT" --headless --path godot --script res://tests/test_elements.gd
 ```
-Expected: all four checks PASS, `DONE: elements ok`.
+Expected: both checks PASS, `DONE: elements ok`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add godot/scripts/map/map_generator.gd godot/tests/test_elements.gd
-git commit -m "Conveyor: salt belts onto connector platforms"
+git add godot/scripts/map/map_generator.gd godot/tests/test_elements.gd godot/tests/test_elements.gd.uid
+git commit -m "Conveyor: salt belts onto connectors + element test suite"
 ```
 
 ---
@@ -273,7 +242,7 @@ git commit -m "Conveyor: salt belts onto connector platforms"
 
 **Files:**
 - Modify: `godot/scripts/map/map_generator.gd` (let the mover loop emit `axis:"y"` with vertical clearance)
-- Modify: `godot/tests/test_elements.gd` (coverage: some seed produces a vertical mover, planning stays sound)
+- Modify: `godot/tests/test_elements.gd` (coverage: some seed produces a vertical mover; soundness still holds)
 
 **Interfaces:**
 - Consumes: nothing new (`PlatformBody._physics_process` and `MapPlanner._sweep_rect` already handle `axis:"y"`).
@@ -281,13 +250,13 @@ git commit -m "Conveyor: salt belts onto connector platforms"
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `_init` in `godot/tests/test_elements.gd`:
+In `godot/tests/test_elements.gd`, register a third check in `_init` (after the conveyor checks):
 
 ```gdscript
 	failures += _check("some seed produces a vertical mover", _test_gen_has_ymover())
 ```
 
-And the method:
+And add the method:
 
 ```gdscript
 func _test_gen_has_ymover() -> bool:
@@ -305,11 +274,11 @@ Run:
 ```bash
 "$GODOT" --headless --path godot --script res://tests/test_elements.gd
 ```
-Expected: `FAIL some seed produces a vertical mover` (the loop only emits `axis:"x"`).
+Expected: `FAIL some seed produces a vertical mover` (the loop only emits `axis:"x"`), `FAILED: 1 test(s)`.
 
 - [ ] **Step 3: Emit vertical movers with vertical clearance**
 
-In `godot/scripts/map/map_generator.gd`, inside the `while movers_assigned < mover_target` loop, replace the horizontal-only `p["move"]` assignment (lines 303-308) with an axis choice. After the existing `max_amp` computation and the `if max_amp < 50.0: continue` guard, compute a vertical clearance and pick an axis:
+In `godot/scripts/map/map_generator.gd`, inside the `while movers_assigned < mover_target` loop, replace the block that builds `probe`, sets the horizontal-only `p["move"]`, checks the unreachable delta, and increments `movers_assigned` (lines 301-312) with an axis choice. It goes after the existing `max_amp` computation and the `if max_amp < 50.0: continue` guard:
 
 ```gdscript
 		# Vertical clearance: nearest platform above/below within this column.
@@ -347,7 +316,7 @@ In `godot/scripts/map/map_generator.gd`, inside the `while movers_assigned < mov
 		movers_assigned += 1
 ```
 
-Note: this replaces the old lines that built `probe`, set `p["move"]` (x only), checked the unreachable delta, and incremented `movers_assigned`. Keep the existing `_strip_colliding_movers`/`validate` planner pass — it already strips any vertical sweep that collides via `_mover_sweep_collides` and `_sweep_rect`.
+The existing `_strip_colliding_movers`/`validate` planner pass already strips any vertical sweep that collides (`_mover_sweep_collides` + `_sweep_rect` both handle the y axis).
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -355,7 +324,7 @@ Run:
 ```bash
 "$GODOT" --headless --path godot --script res://tests/test_elements.gd
 ```
-Expected: all five checks PASS, `DONE: elements ok`. (`generation stays sound with conveyors` still passes — it validates every seed, vertical movers included.)
+Expected: all three checks PASS, `DONE: elements ok`. (`generation stays sound with conveyors` still passes — it validates every seed, vertical movers included.)
 
 - [ ] **Step 5: Commit**
 
@@ -405,6 +374,7 @@ If everything is green, Phase A1 is complete and shippable. Do NOT tag/release (
 ## Self-review notes
 
 - **Spec coverage (A1 slice):** Conveyor — data (§3.1), runtime force, generator placement, planner no-op (conservative) ✔. Vertical elevator — generator emission (§3.3), planner already-modeled ✔. Determinism: belt + mover both ride static geometry / `world_clock`, applied on the authority pawn only ✔.
+- **Testing reality:** node classes that touch autoloads can't be instantiated headless, so `PlatformBody`/`Player` changes are verified by clean import + `--auto` integration; the pure generation/planner layer carries the unit tests. This matches the existing `test_mapgen`/`test_lagcomp` split.
 - **Out of scope here (later plans):** Phase platform, Angled launcher, Updraft, Pinch gate (A2); 6 landmarks, 4–6 dial, connector salting beyond conveyors (A3); Crumbling, Zip-line, Phase-B curator (deferred).
 - **Risk:** the vertical-mover clearance heuristic may reject many candidates (falling back to horizontal); acceptable — the planner probe guarantees no map is broken, and A3's Shaft landmark gives vertical movers a guaranteed home.
 
