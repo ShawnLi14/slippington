@@ -8,6 +8,7 @@ func _init() -> void:
 	var failures := 0
 	failures += _check("generation stays sound with conveyors", _test_gen_sound())
 	failures += _check("some seed produces a conveyor", _test_gen_has_conveyor())
+	failures += _check("some seed produces a vertical mover", _test_gen_has_ymover())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -32,5 +33,13 @@ func _test_gen_has_conveyor() -> bool:
 		var m := MapGenerator.generate("a1-%d" % s)
 		for p in m["platforms"]:
 			if not p.get("conveyor", {}).is_empty():
+				return true
+	return false
+
+func _test_gen_has_ymover() -> bool:
+	for s in 60:
+		var m := MapGenerator.generate("a1-%d" % s)
+		for p in m["platforms"]:
+			if p.get("move", {}).get("axis", "x") == "y":
 				return true
 	return false

@@ -305,17 +305,35 @@ static func generate(seed_string: String) -> Dictionary:
 				max_amp = minf(max_amp, qr.position.x - rect.end.x - 12.0)
 		if max_amp < 50.0:
 			continue
-		# A patrol widens this platform's blocker footprint to its whole
-		# sweep, which can sever jump arcs that route past it. Only keep the
-		# mover if the map stays exactly as reachable as before.
+		# Vertical clearance: nearest platform above/below within this column.
+		var v_amp := minf(rect.position.y - 120.0, LANDMARK_TOP - rect.end.y)
+		for q in platforms:
+			if q == p:
+				continue
+			var qr2: Rect2 = q["rect"]
+			if qr2.end.x <= rect.position.x or qr2.position.x >= rect.end.x:
+				continue  # not in this column
+			if qr2.end.y <= rect.position.y:
+				v_amp = minf(v_amp, rect.position.y - qr2.end.y - 12.0)
+			elif qr2.position.y >= rect.end.y:
+				v_amp = minf(v_amp, qr2.position.y - rect.end.y - 12.0)
+		var go_vertical := v_amp >= 60.0 and rng.next() < 0.4
 		var probe := {"width": width, "height": height, "platforms": platforms, "objects": objects}
 		var base_unreachable: int = MapPlanner._unreachable_surfaces(probe).size()
-		p["move"] = {
-			"axis": "x",
-			"amplitude": minf(rng.next_float(110.0, 180.0), max_amp),
-			"period": rng.next_float(6.0, 9.0),
-			"phase": rng.next_float(0.0, 1.0),
-		}
+		if go_vertical:
+			p["move"] = {
+				"axis": "y",
+				"amplitude": minf(rng.next_float(70.0, 130.0), v_amp),
+				"period": rng.next_float(5.0, 8.0),
+				"phase": rng.next_float(0.0, 1.0),
+			}
+		else:
+			p["move"] = {
+				"axis": "x",
+				"amplitude": minf(rng.next_float(110.0, 180.0), max_amp),
+				"period": rng.next_float(6.0, 9.0),
+				"phase": rng.next_float(0.0, 1.0),
+			}
 		if MapPlanner._unreachable_surfaces(probe).size() > base_unreachable:
 			p.erase("move")
 			continue
