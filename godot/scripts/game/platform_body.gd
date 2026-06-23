@@ -15,6 +15,7 @@ var type := "solid"
 var thru := false
 var ramp := 0  # 0 = flat; 1 rises to the right, -1 to the left (triangle)
 var move_data: Dictionary = {}  # {axis, amplitude, period, phase} or empty
+var conveyor: Dictionary = {}  # {dir: ±1, speed: float} or empty
 
 var _base_pos := Vector2.ZERO
 
@@ -26,6 +27,7 @@ static func create(data: Dictionary) -> PlatformBody:
 	p.thru = data.get("thru", false)
 	p.ramp = data.get("ramp", 0)
 	p.move_data = data.get("move", {})
+	p.conveyor = data.get("conveyor", {})
 	return p
 
 
@@ -119,6 +121,14 @@ func _draw() -> void:
 			x += 20.0
 	else:
 		draw_line(Vector2(-half.x, -half.y + 2), Vector2(half.x, -half.y + 2), edge, 4.0 if type == "ice" else 3.0)
+	if not conveyor.is_empty():
+		var cdir: int = conveyor["dir"]
+		var cy := -half.y + 9.0
+		var cx := -half.x + 14.0
+		while cx < half.x - 14.0:
+			draw_line(Vector2(cx, cy - 4), Vector2(cx + 6 * cdir, cy), Color(1, 1, 1, 0.6), 2.0)
+			draw_line(Vector2(cx + 6 * cdir, cy), Vector2(cx, cy + 4), Color(1, 1, 1, 0.6), 2.0)
+			cx += 22.0
 	if type == "ice":
 		# Glints so it reads as slippery at a glance.
 		var gx := -half.x + 14.0
