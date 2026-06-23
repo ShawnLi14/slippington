@@ -43,6 +43,8 @@ var _swap_state := "approach"
 var _swap_at := 0.0
 var _swap_pre_me := Vector2.ZERO
 var _swap_pre_other := Vector2.ZERO
+var _swap_cast_done := false
+var _swap_self_tagged := false
 
 
 func _release_all() -> void:
@@ -96,6 +98,7 @@ func _ready() -> void:
 		_checks = {"session": false, "roster_2_players": false, "playing_phase": false}
 		if mode == "host-swap":
 			_checks["swap_positions"] = false
+			_checks["no_self_tag"] = false
 			bot_class = "swapper"
 		timeout_sec = 25.0
 	else:
@@ -145,6 +148,9 @@ func _ready() -> void:
 		_tag_count += 1
 		if _tag_count >= 2:
 			_pass("tag_back")
+		if mode == "host-swap" and _swap_cast_done:
+			_swap_self_tagged = true
+			print("[bot host-swap] SELF-TAG after swap: %d -> %d" % [old_it, new_it])
 		print("[bot %s] tag: %d -> %d" % [mode, old_it, new_it])
 		# Visual-check mode: capture the tag presentation mid-effect.
 		if mode == "host" and code_file.ends_with(".png") and shot_event == "tag" and _tag_count == 2:
@@ -463,7 +469,9 @@ func _swap_test_step(game: Game) -> void:
 				_swap_state = "settle"
 				_swap_at = _elapsed + 0.6  # let velocity and the puppet stream settle
 		"settle":
-			if _elapsed >= _swap_at:
+			# Cast only AFTER the pregame grace ends (match_running), so the tag
+			# rules are live and a buggy swap-as-it self-tag can actually surface.
+			if _elapsed >= _swap_at and GameState.match_running:
 				_swap_pre_me = me.global_position
 				_swap_pre_other = other.global_position
 				var sep := _swap_pre_me.distance_to(_swap_pre_other)
@@ -475,6 +483,7 @@ func _swap_test_step(game: Game) -> void:
 				if me.get_cooldown_remaining() <= 0.0:
 					_fail("swap did not fire (no cooldown started)")
 					return
+				_swap_cast_done = true
 				_swap_state = "eval"
 				_swap_at = _elapsed + 0.5  # partner RPC + its sync stream round-trip
 		"eval":
@@ -482,12 +491,18 @@ func _swap_test_step(game: Game) -> void:
 				var d_me := me.global_position.distance_to(_swap_pre_other)
 				var d_other := other.global_position.distance_to(_swap_pre_me)
 				print("[bot %s] after swap: me %s (%.0f px off partner's old spot), other %s (%.0f px off my old spot)" % [mode, me.global_position, d_me, other.global_position, d_other])
-				if d_me <= 60.0 and d_other <= 60.0:
-					_pass("swap_positions")
-					_swap_state = "done"
-					_finish()
-				else:
+				if d_me > 60.0 or d_other > 60.0:
 					_fail("positions did not truly exchange (me off by %.0f, partner off by %.0f)" % [d_me, d_other])
+					return
+				_pass("swap_positions")
+				# A swap cast while "it" must NOT manufacture a tag: teleporting
+				# onto the partner through the replication window is not contact.
+				if _swap_self_tagged:
+					_fail("swap-as-it self-tagged through the replication window")
+					return
+				_pass("no_self_tag")
+				_swap_state = "done"
+				_finish()
 
 	# Success: everything checked — wind down early.
 	var all_passed := true

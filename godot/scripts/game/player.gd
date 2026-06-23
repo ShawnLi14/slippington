@@ -14,20 +14,23 @@ const PHYS_DT := 1.0 / 60.0
 const DELAY_MIN := 0.05
 const DELAY_MAX := 0.15
 const OFFSET_WINDOW_SEC := 3.0
-const MAX_EXTRAPOLATION := 0.1
 ## While "it" and touching someone, re-claim at most this often; the host
 ## rejects claims during tag immunity, so contact re-tags once it expires.
 const CLAIM_INTERVAL_MS := 250
 ## Tag claims need deeper contact than the sprites' 40px — grazes that look
 ## like nothing on the victim's screen shouldn't count.
 const CLAIM_CONTACT_SIZE := GameConfig.PLAYER_SIZE * 0.85
-## Host-side position history window for lag-compensated claim validation.
-const HISTORY_WINDOW := 0.6
 ## Echo (Rewind) looks 2s into the past; keep a little extra so the lookup
 ## never falls off the end of the buffer.
 const ECHO_WINDOW := 2.2
 ## Brief freeze applied to both players involved in a tag (hit-stop).
 const TAG_HITSTOP := 0.15
+## After a teleport (Swap/Blink/Rewind) the destination overlaps whatever the
+## player landed on until that move replicates everywhere. Suppress this
+## player's OWN tag claims for this long so teleporting onto someone can't
+## manufacture a tag through the replication window — you still have to catch
+## them. Dash isn't a teleport, so dash-to-tag stays valid.
+const TELEPORT_TAG_SUPPRESS := 0.25
 
 var peer_id := 1
 var player_class: PlayerClass
@@ -67,12 +70,19 @@ var _last_seq := -1
 var _offset_window: Array = []  # [{at: local sec, off: sec}]
 var _stream_offset := 0.0
 var _interp_delay := DELAY_MIN
+# True while the puppet is extrapolating past its newest snapshot (a packet
+# gap): the rendered position is a guess, not to be trusted for tag contact.
+var _is_extrapolating := false
 var _teleport_count := 0
 var _seen_teleport_count := 0
 var _last_claim_ms := 0
+var _tag_suppress_until_ms := 0
 
 # Host-only: timestamped position history for lag-compensated tag validation.
-var _history: Array = []
+# Teleport-aware, so a rewind never lands on a phantom point between a
+# teleport's two endpoints (see LagCompHistory).
+var _history := LagCompHistory.new()
+var _last_history_teleport_count := 0
 
 # Echo class only: recent (t, pos, vel) trail for the Rewind ability. The
 # authority records its exact state; puppets record the sync stream so
@@ -225,7 +235,8 @@ func _authority_physics(delta: float) -> void:
 		_check_tagging()
 
 	if multiplayer.is_server():
-		_record_history(global_position)
+		_record_history(global_position, _teleport_count != _last_history_teleport_count)
+		_last_history_teleport_count = _teleport_count
 
 	# Hard world bounds (map edges).
 	var half := GameConfig.PLAYER_SIZE / 2.0
@@ -251,27 +262,9 @@ func _puppet_interpolate() -> void:
 		return
 	# Estimated newest-available sender time, minus the adaptive delay.
 	var render_t := Time.get_ticks_msec() / 1000.0 - _stream_offset - _interp_delay
-	var prev: Dictionary
-	var next: Dictionary
-	for s in _snapshots:
-		if s["t"] <= render_t:
-			prev = s
-		else:
-			next = s
-			break
-	var target: Vector2
-	if prev.is_empty():
-		target = _snapshots[0]["pos"]
-	elif next.is_empty():
-		# Newest snapshot is older than the render time (packet gap):
-		# extrapolate along last known velocity, but only briefly.
-		var dt: float = clampf(render_t - prev["t"], 0.0, MAX_EXTRAPOLATION)
-		target = prev["pos"] + prev["vel"] * dt
-	else:
-		var span: float = next["t"] - prev["t"]
-		var f: float = 0.0 if span <= 0.0 else (render_t - prev["t"]) / span
-		target = prev["pos"].lerp(next["pos"], f)
-	global_position = target
+	var r := PuppetStream.sample(_snapshots, render_t)
+	global_position = r["pos"]
+	_is_extrapolating = r["extrapolating"]
 
 
 ## The delay this client is currently rendering this player at — sent with
@@ -280,10 +273,20 @@ func get_interp_delay() -> float:
 	return _interp_delay
 
 
+## Position to use when testing tag CONTACT against this player. Normally the
+## rendered position, but while extrapolating (a packet gap) the render is a
+## guess that can drift into a chaser — fall back to the last actually-received
+## position so a phantom overshoot can't manufacture a tag.
+func tag_contact_position() -> Vector2:
+	if _is_extrapolating and not _snapshots.is_empty():
+		return _snapshots[-1]["pos"]
+	return global_position
+
+
 @rpc("authority", "call_remote", "unreliable")
 func sync_state(tick: int, pos: Vector2, vel: Vector2, p_facing: bool, p_anim: String, teleports: int, p_tilt: float) -> void:
 	if multiplayer.is_server():
-		_record_history(pos)
+		_record_history(pos, teleports != _seen_teleport_count)
 	# Unreliable channels reorder: a late stale packet must not rewind the
 	# timeline (this was a visible source of puppet twitch).
 	if tick <= _last_seq:
@@ -329,15 +332,20 @@ func _set_facing(right: bool) -> void:
 
 func _check_tagging() -> void:
 	var now := Time.get_ticks_msec()
+	if now < _tag_suppress_until_ms:
+		return  # just teleported — contact here is manufactured, not earned
 	if now - _last_claim_ms < CLAIM_INTERVAL_MS:
 		return
 	for other in get_tree().get_nodes_in_group("players"):
 		if other == self:
 			continue
 		# Box overlap, slightly deeper than the sprites — matches what the
-		# player sees while ruling out grazes the victim never saw.
-		if absf(other.global_position.x - global_position.x) < CLAIM_CONTACT_SIZE \
-				and absf(other.global_position.y - global_position.y) < CLAIM_CONTACT_SIZE:
+		# player sees while ruling out grazes the victim never saw. Use the
+		# puppet's real (non-extrapolated) position so a packet-gap guess that
+		# drifted into us can't manufacture a tag.
+		var other_pos: Vector2 = other.tag_contact_position()
+		if absf(other_pos.x - global_position.x) < CLAIM_CONTACT_SIZE \
+				and absf(other_pos.y - global_position.y) < CLAIM_CONTACT_SIZE:
 			_last_claim_ms = now
 			GameState.claim_tag_local(peer_id, other.peer_id, global_position, other.get_interp_delay())
 			return
@@ -345,30 +353,15 @@ func _check_tagging() -> void:
 
 # --- host-side position history (lag compensation) -----------------------------
 
-func _record_history(pos: Vector2) -> void:
-	var t := Time.get_ticks_msec() / 1000.0
-	_history.append({"t": t, "pos": pos})
-	while not _history.is_empty() and _history[0]["t"] < t - HISTORY_WINDOW:
-		_history.pop_front()
+func _record_history(pos: Vector2, is_teleport := false) -> void:
+	_history.record(Time.get_ticks_msec() / 1000.0, pos, is_teleport)
 
 
 ## Host-only: this player's position at a past host-clock time, interpolated
-## between recorded samples. Clamps to the oldest/newest sample.
+## between recorded samples (clamped to the oldest/newest, and never across a
+## teleport).
 func position_at(t: float) -> Vector2:
-	if _history.is_empty():
-		return global_position
-	if t <= _history[0]["t"]:
-		return _history[0]["pos"]
-	for i in range(_history.size() - 1, -1, -1):
-		if _history[i]["t"] <= t:
-			if i == _history.size() - 1:
-				return _history[i]["pos"]
-			var a: Dictionary = _history[i]
-			var b: Dictionary = _history[i + 1]
-			var span: float = b["t"] - a["t"]
-			var f: float = 0.0 if span <= 0.0 else (t - a["t"]) / span
-			return a["pos"].lerp(b["pos"], f)
-	return _history[0]["pos"]
+	return _history.position_at(t, global_position)
 
 
 # --- abilities ----------------------------------------------------------------
@@ -540,6 +533,10 @@ func play_remote_ability(ability_id: String) -> void:
 
 func spawn_blink_trail(from_pos: Vector2, to_pos: Vector2) -> void:
 	_teleport_count += 1  # tells puppets to snap instead of glide
+	# This is the canonical "I just teleported" hook (Swap/Blink/Rewind all
+	# route through here): block our own tag claims briefly so an instant
+	# relocation onto another player can't auto-tag before they replicate away.
+	_tag_suppress_until_ms = Time.get_ticks_msec() + int(TELEPORT_TAG_SUPPRESS * 1000.0)
 	for i in 6:
 		var ghost := _make_ghost(from_pos.lerp(to_pos, float(i) / 5.0))
 		get_parent().add_child(ghost)
