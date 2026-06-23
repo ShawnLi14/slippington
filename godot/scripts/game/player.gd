@@ -203,6 +203,9 @@ func _authority_physics(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, target_vx, GameConfig.ICE_ACCEL * delta)
 		else:
 			velocity.x = target_vx
+			var belt := _standing_on_conveyor()
+			if not belt.is_empty():
+				velocity.x += float(belt["dir"]) * belt["speed"]
 		if direction > 0.0:
 			_set_facing(true)
 		elif direction < 0.0:
@@ -387,6 +390,17 @@ func _standing_on_ice() -> bool:
 		if collider is PlatformBody and collider.type == "ice":
 			return true
 	return false
+
+
+## The conveyor belt (if any) the player is standing on, else {}.
+func _standing_on_conveyor() -> Dictionary:
+	if not is_on_floor():
+		return {}
+	for i in get_slide_collision_count():
+		var collider := get_slide_collision(i).get_collider()
+		if collider is PlatformBody and not collider.conveyor.is_empty():
+			return collider.conveyor
+	return {}
 
 
 ## Launch from a spring pad (applied by the owning peer only).
