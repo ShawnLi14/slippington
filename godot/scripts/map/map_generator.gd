@@ -318,6 +318,9 @@ static func generate(seed_string: String) -> Dictionary:
 			elif qr2.position.y >= rect.end.y:
 				v_amp = minf(v_amp, qr2.position.y - rect.end.y - 12.0)
 		var go_vertical := v_amp >= 60.0 and rng.next() < 0.4
+		# A patrol (x or y) widens this platform's blocker footprint to its whole
+		# sweep, which can sever jump arcs that route past it. Only keep the mover
+		# if the map stays exactly as reachable as before.
 		var probe := {"width": width, "height": height, "platforms": platforms, "objects": objects}
 		var base_unreachable: int = MapPlanner._unreachable_surfaces(probe).size()
 		if go_vertical:
