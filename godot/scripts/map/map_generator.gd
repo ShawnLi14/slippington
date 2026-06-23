@@ -167,8 +167,9 @@ static func generate(seed_string: String) -> Dictionary:
 			platforms.append(platform)
 			layer_platforms.append(platform)
 
-			# Salt a conveyor onto eligible flats (solid, non-thru, non-ramp).
+			# Salt a conveyor onto eligible flats (solid, non-thru, non-ramp, non-phase).
 			if not platform.has("ramp") and not platform.get("thru", false) \
+					and not platform.has("phase") \
 					and platform["type"] == "solid" and rng.next() < CONVEYOR_CHANCE:
 				platform["conveyor"] = {
 					"dir": 1 if rng.next() < 0.5 else -1,
