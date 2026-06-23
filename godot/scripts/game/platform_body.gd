@@ -16,6 +16,7 @@ var thru := false
 var ramp := 0  # 0 = flat; 1 rises to the right, -1 to the left (triangle)
 var move_data: Dictionary = {}  # {axis, amplitude, period, phase} or empty
 var conveyor: Dictionary = {}  # {dir: ±1, speed: float} or empty
+var phase: Dictionary = {}  # {period, duty, offset} or empty — clocked solid↔thru
 
 var _base_pos := Vector2.ZERO
 
@@ -28,6 +29,7 @@ static func create(data: Dictionary) -> PlatformBody:
 	p.ramp = data.get("ramp", 0)
 	p.move_data = data.get("move", {})
 	p.conveyor = data.get("conveyor", {})
+	p.phase = data.get("phase", {})
 	return p
 
 
@@ -58,7 +60,7 @@ func _ready() -> void:
 	position = rect.position + rect.size / 2.0
 	_base_pos = position
 	sync_to_physics = not move_data.is_empty()
-	set_physics_process(not move_data.is_empty())
+	set_physics_process(not move_data.is_empty() or not phase.is_empty())
 	var shape := CollisionShape2D.new()
 	if ramp != 0:
 		var tri := ConvexPolygonShape2D.new()
@@ -68,7 +70,7 @@ func _ready() -> void:
 		var rect_shape := RectangleShape2D.new()
 		rect_shape.size = rect.size
 		shape.shape = rect_shape
-	if thru:
+	if thru or not phase.is_empty():
 		collision_layer = 2
 		shape.one_way_collision = true
 		shape.one_way_collision_margin = 8.0
@@ -78,12 +80,21 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	var t: float = GameState.world_clock / move_data["period"] + move_data["phase"]
-	var offset: float = move_data["amplitude"] * sin(TAU * t)
-	if move_data["axis"] == "y":
-		position = _base_pos + Vector2(0, offset)
-	else:
-		position = _base_pos + Vector2(offset, 0)
+	if not move_data.is_empty():
+		var t: float = GameState.world_clock / move_data["period"] + move_data["phase"]
+		var offset: float = move_data["amplitude"] * sin(TAU * t)
+		if move_data["axis"] == "y":
+			position = _base_pos + Vector2(0, offset)
+		else:
+			position = _base_pos + Vector2(offset, 0)
+	if not phase.is_empty():
+		var on: bool = fmod(GameState.world_clock + phase["offset"], phase["period"]) < phase["duty"] * phase["period"]
+		var want := 2 if on else 0
+		if collision_layer != want:
+			collision_layer = want
+		if (on and modulate.a != 1.0) or (not on and modulate.a != 0.45):
+			modulate.a = 1.0 if on else 0.45
+			queue_redraw()
 
 
 func _draw() -> void:
@@ -129,6 +140,11 @@ func _draw() -> void:
 			draw_line(Vector2(cx, cy - 4), Vector2(cx + 6 * cdir, cy), Color(1, 1, 1, 0.6), 2.0)
 			draw_line(Vector2(cx + 6 * cdir, cy), Vector2(cx, cy + 4), Color(1, 1, 1, 0.6), 2.0)
 			cx += 22.0
+	if not phase.is_empty():
+		var px := -half.x + 6.0
+		while px < half.x - 6.0:
+			draw_line(Vector2(px, -half.y + 2), Vector2(minf(px + 8, half.x - 6.0), -half.y + 2), Color(1, 1, 1, 0.7), 2.0)
+			px += 16.0
 	if type == "ice":
 		# Glints so it reads as slippery at a glance.
 		var gx := -half.x + 14.0
