@@ -143,7 +143,7 @@ func _draw() -> void:
 	if not phase.is_empty():
 		var px := -half.x + 6.0
 		while px < half.x - 6.0:
-			draw_line(Vector2(px, -half.y + 2), Vector2(minf(px + 8, half.x - 6.0), -half.y + 2), Color(1, 1, 1, 0.7), 2.0)
+			draw_line(Vector2(px, -half.y + 5), Vector2(minf(px + 8, half.x - 6.0), -half.y + 5), Color(1, 1, 1, 0.7), 2.0)
 			px += 16.0
 	if type == "ice":
 		# Glints so it reads as slippery at a glance.
