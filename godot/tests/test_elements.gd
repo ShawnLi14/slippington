@@ -18,6 +18,8 @@ func _init() -> void:
 	failures += _check("launcher reaches an in-arc target", _test_launcher_edge())
 	failures += _check("launcher rejects an out-of-arc target", _test_launcher_miss())
 	failures += _check("some seed produces a launcher", _test_gen_has_launcher())
+	failures += _check("updraft lifts to an in-column target", _test_updraft_edge())
+	failures += _check("updraft rejects an out-of-column target", _test_updraft_miss())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -128,3 +130,16 @@ func _test_gen_has_launcher() -> bool:
 			if o["type"] == "launcher":
 				return true
 	return false
+
+func _test_updraft_edge() -> bool:
+	var support := {"rect": Rect2(400, 900, 160, 16), "type": "solid"}
+	var target := {"rect": Rect2(420, 600, 120, 16), "type": "solid"}
+	var blockers: Array[Rect2] = []
+	# column spans x 400..560, y 560..900 (base just above support)
+	return MapPlanner._updraft_edge_ok(Rect2(400, 560, 160, 340), support, target, blockers)
+
+func _test_updraft_miss() -> bool:
+	var support := {"rect": Rect2(400, 900, 160, 16), "type": "solid"}
+	var target := {"rect": Rect2(900, 600, 120, 16), "type": "solid"}  # far right, outside column
+	var blockers: Array[Rect2] = []
+	return not MapPlanner._updraft_edge_ok(Rect2(400, 560, 160, 340), support, target, blockers)

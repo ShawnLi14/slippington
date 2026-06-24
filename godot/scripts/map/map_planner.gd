@@ -98,6 +98,12 @@ static func validate(map: Dictionary) -> Array:
 				issues.append("launcher unsupported at %.0f,%.0f" % [obj["pos"].x, obj["pos"].y])
 			elif not _launcher_has_target(map, obj):
 				issues.append("launcher with no target at %.0f,%.0f" % [obj["pos"].x, obj["pos"].y])
+		elif obj["type"] == "updraft":
+			var uz2: Rect2 = obj["rect"]
+			if _support_under(map, Vector2(uz2.get_center().x, uz2.end.y), 24.0) == null:
+				issues.append("updraft unsupported at %.0f,%.0f" % [uz2.position.x, uz2.position.y])
+			elif not _updraft_has_target(map, obj):
+				issues.append("updraft with no target at %.0f,%.0f" % [uz2.position.x, uz2.position.y])
 	for p in map["platforms"]:
 		if p.has("move") and _mover_sweep_collides(map, p):
 			var r: Rect2 = p["rect"]
@@ -295,6 +301,29 @@ static func _launcher_edge_ok(pad_pos: Vector2, vel: Vector2, support: Dictionar
 	return false
 
 
+## Can a player floating up inside an updraft column reach surface `b`? The
+## column lifts you anywhere within its x-span up to its top; you then step
+## off onto a surface overlapping that span and above the base.
+static func _updraft_edge_ok(zone: Rect2, support: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
+	if b == support:
+		return false
+	var rb: Rect2 = b["rect"]
+	# Surface must overlap the column horizontally and sit within the lift band
+	# (above the base, at or below the column top minus a small margin).
+	if rb.end.x < zone.position.x or rb.position.x > zone.end.x:
+		return false
+	if rb.position.y > zone.end.y - GameConfig.PLAYER_SIZE:
+		return false  # not above the base (inside/below the column floor)
+	if rb.position.y < zone.position.y - HEIGHT_MARGIN:
+		return false  # above the column's reach
+	var lx := clampf(zone.get_center().x, rb.position.x, rb.end.x)
+	var rise_pt := Vector2(lx, zone.position.y)
+	var land := Vector2(lx, rb.position.y - 6.0)
+	var skip := [support, b]
+	return not _segment_blocked(Vector2(lx, zone.end.y - 8), rise_pt, blockers, skip) \
+			and not _segment_blocked(rise_pt, land, blockers, skip)
+
+
 ## Surface directly under a point (springs sit ~7px above their platform;
 ## portals hover ~36px above theirs).
 static func _support_under(map: Dictionary, pos: Vector2, max_drop := 70.0):
@@ -360,6 +389,16 @@ static func _build_graph(map: Dictionary) -> Dictionary:
 				if j != li and _launcher_edge_ok(obj["pos"], obj["vel"], lsupport, surfaces[j], blockers):
 					if not j in adj[li]:
 						adj[li].append(j)
+		elif obj["type"] == "updraft":
+			var uz: Rect2 = obj["rect"]
+			var usupport = _support_under(map, Vector2(uz.get_center().x, uz.end.y), 24.0)
+			if usupport == null:
+				continue
+			var ui := surfaces.find(usupport)
+			for j in n:
+				if j != ui and _updraft_edge_ok(uz, usupport, surfaces[j], blockers):
+					if not j in adj[ui]:
+						adj[ui].append(j)
 	var ground := 0
 	for i in n:
 		if surfaces[i]["rect"].position.y > surfaces[ground]["rect"].position.y:
@@ -600,6 +639,20 @@ static func _launcher_has_target(map: Dictionary, obj: Dictionary) -> bool:
 	return false
 
 
+static func _updraft_has_target(map: Dictionary, obj: Dictionary) -> bool:
+	var uz: Rect2 = obj["rect"]
+	var support = _support_under(map, Vector2(uz.get_center().x, uz.end.y), 24.0)
+	if support == null:
+		return false
+	var blockers := _blockers(map)
+	for s in _surfaces(map):
+		if s == support:
+			continue
+		if _updraft_edge_ok(uz, support, s, blockers):
+			return true
+	return false
+
+
 static func _point_has_clearance(map: Dictionary, pos: Vector2) -> bool:
 	var box := Rect2(pos - Vector2(24, 24), Vector2(48, 48))
 	for p in map["platforms"]:
@@ -649,6 +702,9 @@ static func _scrub_objects(map: Dictionary) -> void:
 				dropped_portal = true
 		elif obj["type"] == "launcher":
 			ok = _support_under(map, obj["pos"], 20.0) != null and _launcher_has_target(map, obj)
+		elif obj["type"] == "updraft":
+			ok = _support_under(map, Vector2(obj["rect"].get_center().x, obj["rect"].end.y), 24.0) != null \
+				and _updraft_has_target(map, obj)
 		if ok:
 			keep.append(obj)
 	if dropped_portal:
