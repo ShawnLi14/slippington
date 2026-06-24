@@ -15,6 +15,8 @@ func _init() -> void:
 	failures += _check("pinch partners are sweep-exempt", _test_pinch_sweep_exempt())
 	failures += _check("pinch mover is not a blocker", _test_pinch_nonblocking())
 	failures += _check("some seed produces a pinch pair", _test_gen_has_pinch())
+	failures += _check("launcher reaches an in-arc target", _test_launcher_edge())
+	failures += _check("launcher rejects an out-of-arc target", _test_launcher_miss())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -102,3 +104,17 @@ func _test_gen_has_pinch() -> bool:
 			if p.get("move", {}).has("pinch"):
 				return true
 	return false
+
+func _test_launcher_edge() -> bool:
+	var support := {"rect": Rect2(200, 900, 200, 16), "type": "solid"}
+	var target := {"rect": Rect2(640, 640, 200, 16), "type": "solid"}
+	var blockers: Array[Rect2] = []
+	# pad sits on the support, fires up-and-right
+	return MapPlanner._launcher_edge_ok(Vector2(300, 893), Vector2(260, -700), support, target, blockers)
+
+func _test_launcher_miss() -> bool:
+	var support := {"rect": Rect2(200, 900, 200, 16), "type": "solid"}
+	# target far to the LEFT and high — the up-RIGHT launch can't reach it
+	var target := {"rect": Rect2(-400, 300, 200, 16), "type": "solid"}
+	var blockers: Array[Rect2] = []
+	return not MapPlanner._launcher_edge_ok(Vector2(300, 893), Vector2(260, -700), support, target, blockers)

@@ -93,6 +93,11 @@ static func validate(map: Dictionary) -> Array:
 				issues.append("portal exit unsupported at %.0f,%.0f" % [obj["dest"].x, obj["dest"].y])
 			elif not _point_has_clearance(map, obj["dest"]):
 				issues.append("portal exit blocked at %.0f,%.0f" % [obj["dest"].x, obj["dest"].y])
+		elif obj["type"] == "launcher":
+			if _support_under(map, obj["pos"], 20.0) == null:
+				issues.append("launcher unsupported at %.0f,%.0f" % [obj["pos"].x, obj["pos"].y])
+			elif not _launcher_has_target(map, obj):
+				issues.append("launcher with no target at %.0f,%.0f" % [obj["pos"].x, obj["pos"].y])
 	for p in map["platforms"]:
 		if p.has("move") and _mover_sweep_collides(map, p):
 			var r: Rect2 = p["rect"]
@@ -256,6 +261,40 @@ static func _spring_edge_ok(pad_pos: Vector2, support: Dictionary, b: Dictionary
 	return false
 
 
+## Can a player launched from `pad_pos` with initial velocity `vel` (up and
+## sideways) reach surface `b`? Models the projectile arc plus air-steering,
+## conservatively (plans at SPEED). vel.y is negative (up).
+static func _launcher_edge_ok(pad_pos: Vector2, vel: Vector2, support: Dictionary, b: Dictionary, blockers: Array[Rect2]) -> bool:
+	if b == support:
+		return false
+	var rb: Rect2 = b["rect"]
+	var apex_h: float = vel.y * vel.y / (2.0 * GRAVITY)  # height gained above the pad
+	var rise: float = pad_pos.y - rb.position.y           # > 0 means b is above the pad
+	if rise > apex_h - HEIGHT_MARGIN:
+		return false
+	var t_up: float = -vel.y / GRAVITY
+	var fall_h: float = apex_h + HEIGHT_MARGIN - rise
+	var t: float = t_up + sqrt(2.0 * maxf(fall_h, 0.0) / GRAVITY)
+	# Where the launch carries you horizontally, plus air-steering both ways.
+	var center_x: float = pad_pos.x + vel.x * t
+	var reach: float = SPEED * t + EDGE_MARGIN
+	var candidates := [
+		clampf(center_x, rb.position.x, rb.end.x),
+		rb.position.x + 25.0,
+		rb.end.x - 25.0,
+	]
+	var skip := [support, b]
+	for lx in candidates:
+		if absf(lx - center_x) > reach:
+			continue
+		var apex_pt := Vector2(lerpf(pad_pos.x, lx, 0.5), pad_pos.y - apex_h - GameConfig.PLAYER_SIZE / 2.0)
+		var land := Vector2(lx, rb.position.y - 6.0)
+		if not _segment_blocked(pad_pos + Vector2(0, -8), apex_pt, blockers, skip) \
+				and not _segment_blocked(apex_pt, land, blockers, skip):
+			return true
+	return false
+
+
 ## Surface directly under a point (springs sit ~7px above their platform;
 ## portals hover ~36px above theirs).
 static func _support_under(map: Dictionary, pos: Vector2, max_drop := 70.0):
@@ -312,6 +351,15 @@ static func _build_graph(map: Dictionary) -> Dictionary:
 				var xi := surfaces.find(exit_surf)
 				if ei != xi and not xi in adj[ei]:
 					adj[ei].append(xi)
+		elif obj["type"] == "launcher":
+			var lsupport = _support_under(map, obj["pos"], 20.0)
+			if lsupport == null:
+				continue
+			var li := surfaces.find(lsupport)
+			for j in n:
+				if j != li and _launcher_edge_ok(obj["pos"], obj["vel"], lsupport, surfaces[j], blockers):
+					if not j in adj[li]:
+						adj[li].append(j)
 	var ground := 0
 	for i in n:
 		if surfaces[i]["rect"].position.y > surfaces[ground]["rect"].position.y:
@@ -539,6 +587,19 @@ static func _spring_has_target(map: Dictionary, obj: Dictionary) -> bool:
 	return false
 
 
+static func _launcher_has_target(map: Dictionary, obj: Dictionary) -> bool:
+	var support = _support_under(map, obj["pos"], 20.0)
+	if support == null:
+		return false
+	var blockers := _blockers(map)
+	for s in _surfaces(map):
+		if s == support:
+			continue
+		if _launcher_edge_ok(obj["pos"], obj["vel"], support, s, blockers):
+			return true
+	return false
+
+
 static func _point_has_clearance(map: Dictionary, pos: Vector2) -> bool:
 	var box := Rect2(pos - Vector2(24, 24), Vector2(48, 48))
 	for p in map["platforms"]:
@@ -586,6 +647,8 @@ static func _scrub_objects(map: Dictionary) -> void:
 				and _point_has_clearance(map, obj["dest"])
 			if not ok:
 				dropped_portal = true
+		elif obj["type"] == "launcher":
+			ok = _support_under(map, obj["pos"], 20.0) != null and _launcher_has_target(map, obj)
 		if ok:
 			keep.append(obj)
 	if dropped_portal:
