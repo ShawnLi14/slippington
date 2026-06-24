@@ -31,6 +31,8 @@ const CONVEYOR_CHANCE := 0.28
 const PHASE_CHANCE := 0.65
 ## Chance a placed spring is re-aimed as an angled launcher instead.
 const LAUNCHER_CHANCE := 0.45
+## Chance a still-spring pad becomes an updraft column instead.
+const UPDRAFT_CHANCE := 0.30
 ## Landmarks occupy the band between the ground and this height; connector
 ## platforms fill everything above it.
 const LANDMARK_TOP := 640.0
@@ -438,11 +440,24 @@ static func generate(seed_string: String) -> Dictionary:
 	# planner's _scrub_objects DROPS any launcher whose arc has no valid target
 	# (the source spring is then gone, but plan()'s repair pass re-routes, so the
 	# map always stays sound — a conversion can never make a map unreachable).
+	# A pad that did NOT become a launcher may become an updraft column instead
+	# (mutually exclusive, deterministic: launcher roll consumed first).
 	for o in map["objects"]:
-		if o["type"] == "spring" and rng.next() < LAUNCHER_CHANCE:
+		if o["type"] != "spring":
+			continue
+		if rng.next() < LAUNCHER_CHANCE:
 			var dir := 1.0 if rng.next() < 0.5 else -1.0
 			o["type"] = "launcher"
 			o["vel"] = Vector2(dir * rng.next_float(180.0, 280.0), -rng.next_float(640.0, 740.0))
+		elif rng.next() < UPDRAFT_CHANCE:
+			# A column rising from just above the pad's footing up ~spring height.
+			var updraft_w := 96.0
+			var updraft_h := minf(320.0, MapPlanner.spring_height() * 0.7)
+			var pad_pos: Vector2 = o["pos"]
+			o["type"] = "updraft"
+			o["rect"] = Rect2(pad_pos.x - updraft_w / 2.0, pad_pos.y - updraft_h, updraft_w, updraft_h)
+			o["accel"] = 1400.0
+			o.erase("pos")
 	# Post-pass: traversal-graph validation and deterministic repair —
 	# everything must actually be reachable with real jump physics.
 	if skip_plan:

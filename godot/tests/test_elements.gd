@@ -20,6 +20,7 @@ func _init() -> void:
 	failures += _check("some seed produces a launcher", _test_gen_has_launcher())
 	failures += _check("updraft lifts to an in-column target", _test_updraft_edge())
 	failures += _check("updraft rejects an out-of-column target", _test_updraft_miss())
+	failures += _check("some seed produces an updraft", _test_gen_has_updraft())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -143,3 +144,11 @@ func _test_updraft_miss() -> bool:
 	var target := {"rect": Rect2(900, 600, 120, 16), "type": "solid"}  # far right, outside column
 	var blockers: Array[Rect2] = []
 	return not MapPlanner._updraft_edge_ok(Rect2(400, 560, 160, 340), support, target, blockers)
+
+func _test_gen_has_updraft() -> bool:
+	for s in 80:
+		var m := MapGenerator.generate("a2b-%d" % s)
+		for o in m.get("objects", []):
+			if o["type"] == "updraft":
+				return true
+	return false
