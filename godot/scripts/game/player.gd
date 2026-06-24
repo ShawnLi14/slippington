@@ -418,6 +418,12 @@ func apply_launch(launch_vel: Vector2) -> void:
 	SoundManager.play("spring")
 
 
+## Buoyancy from an updraft zone (owning peer only): counter gravity and cap
+## the rise so the player floats up and can still steer.
+func apply_updraft(updraft_accel: float, delta: float) -> void:
+	velocity.y = maxf(velocity.y - updraft_accel * delta, -UpdraftZone.MAX_RISE)
+
+
 ## Step through a portal (owning peer only); cooldown stops the exit
 ## portal from bouncing you straight back.
 func try_portal(dest: Vector2) -> void:

@@ -27,6 +27,8 @@ func _ready() -> void:
 				add_child(Portal.create(obj["pos"], obj["dest"]))
 			"launcher":
 				add_child(LauncherPad.create(obj["pos"], obj["vel"]))
+			"updraft":
+				add_child(UpdraftZone.create(obj["rect"], obj["accel"]))
 
 	_spawn_players()
 
