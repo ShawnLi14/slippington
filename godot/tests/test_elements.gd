@@ -114,7 +114,8 @@ func _test_launcher_edge() -> bool:
 
 func _test_launcher_miss() -> bool:
 	var support := {"rect": Rect2(200, 900, 200, 16), "type": "solid"}
-	# target far to the LEFT and high — the up-RIGHT launch can't reach it
-	var target := {"rect": Rect2(-400, 300, 200, 16), "type": "solid"}
+	# Reachable in HEIGHT (rise 193 < apex), but far LEFT — beyond the launch's
+	# rightward horizontal reach, so the direction/range guard must reject it.
+	var target := {"rect": Rect2(-600, 700, 200, 16), "type": "solid"}
 	var blockers: Array[Rect2] = []
 	return not MapPlanner._launcher_edge_ok(Vector2(300, 893), Vector2(260, -700), support, target, blockers)
