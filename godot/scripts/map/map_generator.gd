@@ -257,6 +257,38 @@ static func generate(seed_string: String) -> Dictionary:
 		})
 		low_mover_placed = true
 
+	# A pinch gate: two counter-phase movers that meet and part — a closing gap
+	# to thread on the beat. Scan the connector layer (y ≈ 700) for a clear
+	# horizontal span — connectors are sparse enough that a 400 px gap nearly
+	# always exists.  The pair is non-blocking (Task 2) so it can't sever
+	# ground routes; the sweep exemption (above) lets pinch partners co-exist
+	# without the planner stripping them.
+	var pinch_y := rng.next_float(680.0, 760.0)
+	var pw := 120.0
+	var pinch_band_used: Array[Vector2] = []
+	for p in platforms:
+		var pr: Rect2 = p["rect"]
+		if pr.position.y < pinch_y + 80.0 and pr.end.y > pinch_y - 80.0:
+			pinch_band_used.append(Vector2(pr.position.x - 20.0, pr.end.x + 20.0))
+	pinch_band_used.sort_custom(func(a, b): return a.x < b.x)
+	var pinch_intervals: Array[Vector2] = []
+	var pstart := gap
+	for seg in pinch_band_used:
+		if seg.x - pstart >= 400.0:
+			pinch_intervals.append(Vector2(pstart, seg.x))
+		pstart = maxf(pstart, seg.y)
+	if float(width) - gap - pstart >= 400.0:
+		pinch_intervals.append(Vector2(pstart, float(width) - gap))
+	if not pinch_intervals.is_empty() and rng.next() < 0.6:
+		var pv: Vector2 = pinch_intervals[rng.next_int(0, pinch_intervals.size() - 1)]
+		var mid := (pv.x + pv.y) / 2.0
+		var amp := minf(150.0, (pv.y - pv.x) / 2.0 - pw - 20.0)
+		var per := rng.next_float(2.6, 3.4)
+		platforms.append({"rect": Rect2(mid - pw - 30.0, pinch_y, pw, PLATFORM_HEIGHT), "type": "solid",
+			"move": {"axis": "x", "amplitude": amp, "period": per, "phase": 0.0, "pinch": int(mid)}})
+		platforms.append({"rect": Rect2(mid + 30.0, pinch_y, pw, PLATFORM_HEIGHT), "type": "solid",
+			"move": {"axis": "x", "amplitude": amp, "period": per, "phase": 0.5, "pinch": int(mid)}})
+
 	# Moving platforms: 2-3 guaranteed per map, preferring the lowest viable
 	# layers (the lowest-first draw below) but allowed to fall back upward —
 	# high patrols still add traversal value. The floor just keeps

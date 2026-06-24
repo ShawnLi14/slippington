@@ -64,6 +64,8 @@ static func plan(map: Dictionary, rng: SeededRng) -> Dictionary:
 			_delete_surface(map, surf)
 		# Route diversity: no single surface may be the only way anywhere.
 		_repair_bottlenecks(map, rng)
+		# Re-strip any movers whose sweeps now conflict with new repair connectors.
+		_strip_colliding_movers(map)
 		if validate(map).is_empty():
 			break
 	_fix_spawns(map, rng)
@@ -553,6 +555,10 @@ static func _mover_sweep_collides(map: Dictionary, mover: Dictionary) -> bool:
 		return true
 	for p in map["platforms"]:
 		if p == mover:
+			continue
+		# A pinch partner's sweep overlaps by design; counter-phase guarantees
+		# they're never co-located, so don't treat the partner as a collision.
+		if mover.get("move", {}).has("pinch") and p.get("move", {}).get("pinch", -999) == mover["move"]["pinch"]:
 			continue
 		if sweep.intersects(p["rect"]):
 			return true

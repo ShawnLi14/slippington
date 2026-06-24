@@ -12,6 +12,8 @@ func _init() -> void:
 	failures += _check("phase platform is not a blocker", _test_phase_nonblocking())
 	failures += _check("phase platform is a landable surface", _test_phase_landable())
 	failures += _check("some seed produces a phase platform", _test_gen_has_phase())
+	failures += _check("pinch partners are sweep-exempt", _test_pinch_sweep_exempt())
+	failures += _check("some seed produces a pinch pair", _test_gen_has_pinch())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -68,5 +70,24 @@ func _test_gen_has_phase() -> bool:
 		var m := MapGenerator.generate("a2-%d" % s)
 		for p in m["platforms"]:
 			if p.has("phase"):
+				return true
+	return false
+
+func _test_pinch_sweep_exempt() -> bool:
+	# Two counter-phase movers whose sweeps overlap in the middle must NOT be
+	# flagged as colliding with each other (they're never co-located in time).
+	var a := {"rect": Rect2(700, 980, 120, 16), "type": "solid",
+		"move": {"axis": "x", "amplitude": 120.0, "period": 3.0, "phase": 0.0, "pinch": 1}}
+	var b := {"rect": Rect2(940, 980, 120, 16), "type": "solid",
+		"move": {"axis": "x", "amplitude": 120.0, "period": 3.0, "phase": 0.5, "pinch": 1}}
+	var m := {"width": 1920, "height": 1080, "platforms": [
+		{"rect": Rect2(0, 1060, 1920, 20), "type": "solid"}, a, b], "objects": []}
+	return not MapPlanner._mover_sweep_collides(m, a) and not MapPlanner._mover_sweep_collides(m, b)
+
+func _test_gen_has_pinch() -> bool:
+	for s in 80:
+		var m := MapGenerator.generate("a2-%d" % s)
+		for p in m["platforms"]:
+			if p.get("move", {}).has("pinch"):
 				return true
 	return false
