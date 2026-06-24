@@ -32,7 +32,9 @@ const TAG_HITSTOP := 0.15
 ## them. Dash isn't a teleport, so dash-to-tag stays valid.
 const TELEPORT_TAG_SUPPRESS := 0.25
 ## How long a launcher pad's horizontal throw is retained in the air before
-## normal air-control fully resumes (covers the whole arc; cleared on landing).
+## normal air-control fully resumes; cleared on landing. MUST cover the longest
+## plausible launcher arc — if it expired mid-flight, MapPlanner._launcher_edge_ok
+## (which assumes the throw carries the whole arc) would over-claim reach.
 const LAUNCH_MOMENTUM_SEC := 2.0
 
 var peer_id := 1
