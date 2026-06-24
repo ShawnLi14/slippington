@@ -23,3 +23,6 @@ godot/export/
 .DS_Store
 *.pem
 npm-debug.log*
+
+# local playtest screenshots
+shots/
