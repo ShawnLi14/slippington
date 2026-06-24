@@ -17,6 +17,7 @@ func _init() -> void:
 	failures += _check("some seed produces a pinch pair", _test_gen_has_pinch())
 	failures += _check("launcher reaches an in-arc target", _test_launcher_edge())
 	failures += _check("launcher rejects an out-of-arc target", _test_launcher_miss())
+	failures += _check("some seed produces a launcher", _test_gen_has_launcher())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -119,3 +120,11 @@ func _test_launcher_miss() -> bool:
 	var target := {"rect": Rect2(-600, 700, 200, 16), "type": "solid"}
 	var blockers: Array[Rect2] = []
 	return not MapPlanner._launcher_edge_ok(Vector2(300, 893), Vector2(260, -700), support, target, blockers)
+
+func _test_gen_has_launcher() -> bool:
+	for s in 80:
+		var m := MapGenerator.generate("a2b-%d" % s)
+		for o in m.get("objects", []):
+			if o["type"] == "launcher":
+				return true
+	return false
