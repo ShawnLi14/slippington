@@ -25,6 +25,8 @@ func _ready() -> void:
 				add_child(SpringPad.create(obj["pos"]))
 			"portal":
 				add_child(Portal.create(obj["pos"], obj["dest"]))
+			"launcher":
+				add_child(LauncherPad.create(obj["pos"], obj["vel"]))
 
 	_spawn_players()
 

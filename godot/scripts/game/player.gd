@@ -410,6 +410,14 @@ func apply_spring(launch_velocity: float) -> void:
 	SoundManager.play("spring")
 
 
+## Directional launch from an angled launcher pad (owning peer only). Unlike
+## the spring (vertical only), this sets both velocity components.
+func apply_launch(launch_vel: Vector2) -> void:
+	velocity = launch_vel
+	dash_left = 0.0
+	SoundManager.play("spring")
+
+
 ## Step through a portal (owning peer only); cooldown stops the exit
 ## portal from bouncing you straight back.
 func try_portal(dest: Vector2) -> void:
