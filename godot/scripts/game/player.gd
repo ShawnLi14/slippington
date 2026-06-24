@@ -31,6 +31,9 @@ const TAG_HITSTOP := 0.15
 ## manufacture a tag through the replication window — you still have to catch
 ## them. Dash isn't a teleport, so dash-to-tag stays valid.
 const TELEPORT_TAG_SUPPRESS := 0.25
+## How long a launcher pad's horizontal throw is retained in the air before
+## normal air-control fully resumes (covers the whole arc; cleared on landing).
+const LAUNCH_MOMENTUM_SEC := 2.0
 
 var peer_id := 1
 var player_class: PlayerClass
@@ -52,6 +55,8 @@ var stun_left := 0.0
 var hitstop_left := 0.0
 var dash_left := 0.0
 var _dash_speed := 0.0
+var launch_left := 0.0  # launcher-pad momentum window: retain the sideways throw in the air
+var _launch_vx := 0.0
 var _drop_through_left := 0.0
 var _portal_cooldown_left := 0.0
 var _cooldown_until_ms := 0
@@ -148,6 +153,7 @@ func _physics_process(delta: float) -> void:
 	stun_left = maxf(0.0, stun_left - delta)
 	hitstop_left = maxf(0.0, hitstop_left - delta)
 	dash_left = maxf(0.0, dash_left - delta)
+	launch_left = maxf(0.0, launch_left - delta)
 	_portal_cooldown_left = maxf(0.0, _portal_cooldown_left - delta)
 	_drop_through_left = maxf(0.0, _drop_through_left - delta)
 	collision_mask = 1 if _drop_through_left > 0.0 else (1 | 2)
@@ -198,7 +204,12 @@ func _authority_physics(delta: float) -> void:
 		velocity.x = 0.0
 	else:
 		var target_vx := direction * GameConfig.PLAYER_SPEED * player_class.speed_mult
-		if _standing_on_ice():
+		if launch_left > 0.0 and not is_on_floor():
+			# Just launched: keep the pad's sideways throw and let the player
+			# steer on top of it, so the directed hop actually carries across
+			# (this is what the planner's launcher arc assumes). Cleared on land.
+			velocity.x = _launch_vx + target_vx
+		elif _standing_on_ice():
 			# Slide: gradual accel/brake — reversing direction is a commitment.
 			velocity.x = move_toward(velocity.x, target_vx, GameConfig.ICE_ACCEL * delta)
 		else:
@@ -228,6 +239,7 @@ func _authority_physics(delta: float) -> void:
 	# perpendicular to it (flat ground and air both resolve to upright).
 	if is_on_floor():
 		_tilt_target = get_floor_normal().angle() + PI / 2.0
+		launch_left = 0.0  # landed — end the launch-momentum window
 	else:
 		_tilt_target = 0.0
 
@@ -414,6 +426,8 @@ func apply_spring(launch_velocity: float) -> void:
 ## the spring (vertical only), this sets both velocity components.
 func apply_launch(launch_vel: Vector2) -> void:
 	velocity = launch_vel
+	_launch_vx = launch_vel.x
+	launch_left = LAUNCH_MOMENTUM_SEC
 	dash_left = 0.0
 	SoundManager.play("spring")
 
