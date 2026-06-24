@@ -13,6 +13,7 @@ func _init() -> void:
 	failures += _check("phase platform is a landable surface", _test_phase_landable())
 	failures += _check("some seed produces a phase platform", _test_gen_has_phase())
 	failures += _check("pinch partners are sweep-exempt", _test_pinch_sweep_exempt())
+	failures += _check("pinch mover is not a blocker", _test_pinch_nonblocking())
 	failures += _check("some seed produces a pinch pair", _test_gen_has_pinch())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
@@ -83,6 +84,16 @@ func _test_pinch_sweep_exempt() -> bool:
 	var m := {"width": 1920, "height": 1080, "platforms": [
 		{"rect": Rect2(0, 1060, 1920, 20), "type": "solid"}, a, b], "objects": []}
 	return not MapPlanner._mover_sweep_collides(m, a) and not MapPlanner._mover_sweep_collides(m, b)
+
+func _test_pinch_nonblocking() -> bool:
+	# A pinch-pair mover must be excluded from blockers (the gap opens every
+	# cycle). With only the ground + one pinch mover, blockers should contain
+	# ONLY the ground rect.
+	var pm := {"rect": Rect2(700, 700, 120, 16), "type": "solid",
+		"move": {"axis": "x", "amplitude": 100.0, "period": 3.0, "phase": 0.0, "pinch": 1}}
+	var m := {"width": 1920, "height": 1080, "platforms": [
+		{"rect": Rect2(0, 1060, 1920, 20), "type": "solid"}, pm], "objects": []}
+	return MapPlanner._blockers(m).size() == 1
 
 func _test_gen_has_pinch() -> bool:
 	for s in 80:
