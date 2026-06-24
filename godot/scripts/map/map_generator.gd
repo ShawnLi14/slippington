@@ -26,9 +26,9 @@ const ICE_CHANCE := 0.15
 const RAMP_CHANCE := 0.16
 const BEND_CHANCE := 0.18
 ## Chance a flat solid connector becomes a conveyor belt.
-const CONVEYOR_CHANCE := 0.12
+const CONVEYOR_CHANCE := 0.28
 ## Chance a thru connector becomes a clocked phase platform instead.
-const PHASE_CHANCE := 0.12
+const PHASE_CHANCE := 0.65
 ## Landmarks occupy the band between the ground and this height; connector
 ## platforms fill everything above it.
 const LANDMARK_TOP := 640.0
@@ -279,7 +279,7 @@ static func generate(seed_string: String) -> Dictionary:
 		pstart = maxf(pstart, seg.y)
 	if float(width) - gap - pstart >= 400.0:
 		pinch_intervals.append(Vector2(pstart, float(width) - gap))
-	if not pinch_intervals.is_empty() and rng.next() < 0.6:
+	if not pinch_intervals.is_empty() and rng.next() < 0.85:
 		var pv: Vector2 = pinch_intervals[rng.next_int(0, pinch_intervals.size() - 1)]
 		var mid := (pv.x + pv.y) / 2.0
 		var amp := minf(150.0, (pv.y - pv.x) / 2.0 - pw - 20.0)
@@ -322,7 +322,7 @@ static func generate(seed_string: String) -> Dictionary:
 	# Keep drawing until the target is met — a candidate too hemmed in to
 	# patrol (clamped amplitude under 60) or one whose sweep would break a
 	# route is discarded, not counted.
-	var mover_target := rng.next_int(2, 3) - (1 if low_mover_placed else 0)
+	var mover_target := rng.next_int(3, 4) - (1 if low_mover_placed else 0)
 	var movers_assigned := 0
 	while movers_assigned < mover_target and not mover_candidates.is_empty():
 		var p: Dictionary = mover_candidates.pop_front()
@@ -355,7 +355,7 @@ static func generate(seed_string: String) -> Dictionary:
 				v_amp = minf(v_amp, rect.position.y - qr2.end.y - 12.0)
 			elif qr2.position.y >= rect.end.y:
 				v_amp = minf(v_amp, qr2.position.y - rect.end.y - 12.0)
-		var go_vertical := v_amp >= 60.0 and rng.next() < 0.4
+		var go_vertical := v_amp >= 60.0 and rng.next() < 0.8
 		# A patrol (x or y) widens this platform's blocker footprint to its whole
 		# sweep, which can sever jump arcs that route past it. Only keep the mover
 		# if the map stays exactly as reachable as before.
