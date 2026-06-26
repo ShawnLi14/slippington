@@ -275,10 +275,10 @@ func _ready() -> void:
 			_take_screenshot(0.3)
 			return
 		"launch-test":
-			# Regression: an angled launcher must retain its horizontal throw in
-			# the air (the planner's launcher arc depends on it). Launch with no
-			# input — with momentum velocity.x stays ~the throw; without it
-			# air-control resets velocity.x to 0 and the planner would over-claim.
+			# Regression: an angled launcher is vertical-dominant: its sideways
+			# throw is NOT held; air control resumes immediately. Launch with no
+			# input — velocity.x must collapse to ~0 within a couple frames — if it stayed
+			# near the throw, the planner's air-control reach model would be wrong.
 			NetworkManager.host_lan(port)
 			GameState.host_start_game(map_choice)
 			await get_tree().create_timer(0.5).timeout
@@ -289,16 +289,16 @@ func _ready() -> void:
 				get_tree().quit(1)
 				return
 			# Launch from wherever it spawned (a valid platform); the up-throw
-			# carries it airborne, where the momentum window holds velocity.x.
+			# carries it airborne, where air control (no input) zeroes velocity.x.
 			lme.apply_launch(Vector2(280, -700))
 			await get_tree().create_timer(0.2).timeout  # airborne by now
 			var lvx: float = lme.velocity.x
-			print("[bot launch-test] velocity.x after launch = %.0f (expect ~280)" % lvx)
-			if lvx > 200.0:
+			print("[bot launch-test] velocity.x after launch = %.0f (expect ~0, not held)" % lvx)
+			if absf(lvx) < 60.0:
 				print("[bot launch-test] ALL CHECKS PASSED")
 				get_tree().quit(0)
 			else:
-				print("[bot launch-test] FAIL: launch momentum lost (vx=%.0f, expected >200)" % lvx)
+				print("[bot launch-test] FAIL: horizontal throw was held (vx=%.0f, expected ~0)" % lvx)
 				get_tree().quit(1)
 			return
 		"host", "host-swap":

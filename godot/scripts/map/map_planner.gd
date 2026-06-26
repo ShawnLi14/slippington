@@ -281,8 +281,10 @@ static func _launcher_edge_ok(pad_pos: Vector2, vel: Vector2, support: Dictionar
 	var t_up: float = -vel.y / GRAVITY
 	var fall_h: float = apex_h + HEIGHT_MARGIN - rise
 	var t: float = t_up + sqrt(2.0 * maxf(fall_h, 0.0) / GRAVITY)
-	# Where the launch carries you horizontally, plus air-steering both ways.
-	var center_x: float = pad_pos.x + vel.x * t
+	# Vertical-dominant launch: the sideways throw is NOT held (air control resumes
+	# immediately), so horizontal reach is air-steering from the pad both ways. The
+	# launch vel.x is deliberately NOT credited as drift — that would over-claim.
+	var center_x: float = pad_pos.x
 	var reach: float = SPEED * t + EDGE_MARGIN
 	var candidates := [
 		clampf(center_x, rb.position.x, rb.end.x),
