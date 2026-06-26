@@ -256,12 +256,23 @@ func _ready() -> void:
 			return
 		"shot-landmark":
 			# Pin a landmark into column 0 and screenshot the live map so each
-			# new structure can be eyeballed. Usage:
-			#   --auto=shot-landmark --landmark=mill --code=mill.png
+			# new structure can be eyeballed. The forced landmark sits in
+			# column 0 (far left), so teleport the player to that column's
+			# center first — the camera is player-centered, so this frames the
+			# structure instead of leaving it at the edge. Usage:
+			#   --auto=shot-landmark --landmark=mill --code-file=mill.png --map=a3-mill
 			MapGenerator.force_landmark = forced_landmark
 			NetworkManager.host_lan(port)
 			GameState.host_start_game(map_choice)
-			_take_screenshot(1.5)
+			await get_tree().create_timer(0.4).timeout
+			var lmg := get_tree().root.get_node_or_null("Main/Screen") as Game
+			var lmme := lmg.local_player() if lmg != null else null
+			if lmg != null and lmme != null:
+				# MAP_WIDTH/8 = center of column 0 (4 columns of width MAP_WIDTH/4).
+				lmme.global_position = Vector2(GameConfig.MAP_WIDTH / 8.0, 760.0)
+				print("[bot] framed landmark at %s" % lmme.global_position)
+			await get_tree().create_timer(0.6).timeout
+			_take_screenshot(0.3)
 			return
 		"launch-test":
 			# Regression: an angled launcher must retain its horizontal throw in
