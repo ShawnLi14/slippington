@@ -26,6 +26,7 @@ func _init() -> void:
 	failures += _check("the Shaft builds a vertical elevator", _test_shaft_builds())
 	failures += _check("the Flicker builds a staggered phase stair", _test_flicker_builds())
 	failures += _check("the Battery launchers reach their targets", _test_battery_builds())
+	failures += _check("the Geyser updraft reaches a side ledge", _test_geyser_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -242,3 +243,28 @@ func _test_battery_builds() -> bool:
 		if not hit:
 			return false
 	return true
+
+func _test_geyser_builds() -> bool:
+	# A central updraft column with side ledges whose inner edge sits at the
+	# column edge (so you can peel onto them). Verify the updraft has at least
+	# one valid in-column landing.
+	var m := MapGenerator._geyser(500.0, 1060.0)
+	var plats: Array = m["platforms"]
+	var zone := Rect2()
+	var found_updraft := false
+	for o in m["objects"]:
+		if o["type"] == "updraft":
+			zone = o["rect"]
+			found_updraft = true
+	if not found_updraft:
+		return false
+	for p in plats:
+		var r: Rect2 = p["rect"]
+		if r.position.x < 500.0 - 120.0 or r.end.x > 500.0 + 120.0:
+			return false
+	var blockers: Array[Rect2] = []
+	var support: Dictionary = plats[0]  # the base footing
+	for b in plats:
+		if MapPlanner._updraft_edge_ok(zone, support, b, blockers):
+			return true
+	return false

@@ -39,7 +39,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker", "battery"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker", "battery", "geyser"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
@@ -63,6 +63,7 @@ const LANDMARK_HALF := {
 	"shaft": 120.0,        # side ledges reach cx±118
 	"flicker": 120.0,      # rungs reach cx±110
 	"battery": 130.0,      # ledges reach cx±105
+	"geyser": 110.0,       # side ledges reach cx±108
 }
 
 
@@ -499,6 +500,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _flicker(cx, rng)
 		"battery":
 			return _battery(cx, rng)
+		"geyser":
+			return _geyser(cx, ground_y)
 	return {"platforms": [], "objects": []}
 
 
@@ -665,6 +668,30 @@ static func _battery(cx: float, rng: SeededRng) -> Dictionary:
 		var dir := 1.0 if nxt.x > here.x else -1.0
 		objects.append({"type": "launcher", "pos": Vector2(here.x, here.y - 7.0),
 			"vel": Vector2(dir * 150.0, -700.0)})
+	return {"platforms": plats, "objects": objects}
+
+
+## A central updraft column flanked by thin side ledges whose inner edge meets
+## the column edge — float the chute and peel onto a ledge, or ride over the
+## top. The chaser must commit to the column to follow; you peel off early. The
+## base footing sits at the column bottom; side ledges are jump-reachable too
+## (updraft additive). _updraft_edge_ok validates the in-column landing.
+static func _geyser(cx: float, ground_y: float) -> Dictionary:
+	var plats: Array[Dictionary] = []
+	var base_y := 965.0
+	# Footing the column rises from (also the support the planner anchors to).
+	plats.append({"rect": Rect2(cx - 70.0, base_y, 140.0, PLATFORM_HEIGHT), "type": "solid"})
+	var col_w := 96.0          # column spans cx-48 .. cx+48
+	var lw := 60.0
+	# Side ledges: inner edge AT the column edge (cx±48) so they overlap the
+	# lift band and you can step off onto them.
+	plats.append({"rect": Rect2(cx + 48.0, 850.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	plats.append({"rect": Rect2(cx - 108.0, 740.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	plats.append({"rect": Rect2(cx + 48.0, 660.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	var col_top := 645.0
+	var objects: Array[Dictionary] = [
+		{"type": "updraft", "rect": Rect2(cx - col_w / 2.0, col_top, col_w, base_y - col_top), "accel": 1400.0},
+	]
 	return {"platforms": plats, "objects": objects}
 
 
