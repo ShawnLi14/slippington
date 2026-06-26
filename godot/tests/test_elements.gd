@@ -25,6 +25,7 @@ func _init() -> void:
 	failures += _check("the Mill builds 4 conveyor belts", _test_mill_builds())
 	failures += _check("the Shaft builds a vertical elevator", _test_shaft_builds())
 	failures += _check("the Flicker builds a staggered phase stair", _test_flicker_builds())
+	failures += _check("the Battery launchers reach their targets", _test_battery_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -210,3 +211,34 @@ func _test_flicker_builds() -> bool:
 		if p.has("phase"):
 			offsets[p["phase"]["offset"]] = true
 	return offsets.size() >= 3
+
+func _test_battery_builds() -> bool:
+	# Rising ledges, each lower one carrying a launcher whose arc reaches the
+	# next ledge (so the planner keeps it). Verify ≥2 launchers AND each has a
+	# valid in-arc target among the ledges.
+	var m := MapGenerator._battery(500.0, SeededRng.new("b"))
+	var ledges: Array = []
+	var launchers: Array = []
+	for p in m["platforms"]:
+		var r: Rect2 = p["rect"]
+		if r.position.x < 500.0 - 140.0 or r.end.x > 500.0 + 140.0:
+			return false
+		ledges.append(p)
+	for o in m["objects"]:
+		if o["type"] == "launcher":
+			launchers.append(o)
+	if launchers.size() < 2:
+		return false
+	var blockers: Array[Rect2] = []
+	for o in launchers:
+		var support = MapPlanner._support_under({"platforms": ledges}, o["pos"])
+		if support == null:
+			return false
+		var hit := false
+		for b in ledges:
+			if MapPlanner._launcher_edge_ok(o["pos"], o["vel"], support, b, blockers):
+				hit = true
+				break
+		if not hit:
+			return false
+	return true

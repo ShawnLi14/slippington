@@ -39,7 +39,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker", "battery"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
@@ -62,6 +62,7 @@ const LANDMARK_HALF := {
 	"mill": 150.0,         # 200 belt /2 + 35 offset + 8 jitter
 	"shaft": 120.0,        # side ledges reach cx±118
 	"flicker": 120.0,      # rungs reach cx±110
+	"battery": 130.0,      # ledges reach cx±105
 }
 
 
@@ -496,6 +497,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _shaft(cx, rng)
 		"flicker":
 			return _flicker(cx, rng)
+		"battery":
+			return _battery(cx, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -642,6 +645,27 @@ static func _flicker(cx: float, rng: SeededRng) -> Dictionary:
 	# Solid top anchor lands the climb (a connector seed at y ≤ 760).
 	plats.append({"rect": Rect2(cx - 50.0, 640.0, 100.0, PLATFORM_HEIGHT), "type": "solid"})
 	return {"platforms": plats, "objects": []}
+
+
+## A pinball lane: ledges in a rising zigzag, each lower ledge carrying an
+## angled launcher that arcs you up-and-over to the next. The launchers are a
+## fast vault up the whole zone; the ledges are also jump-reachable (≤110 px
+## steps) so a slower climb exists too. Each launcher's target is validated by
+## the planner (_launcher_edge_ok) or _scrub_objects drops it.
+static func _battery(cx: float, rng: SeededRng) -> Dictionary:
+	var lw := 90.0
+	var ledges := [Vector2(cx - 60.0, 960.0), Vector2(cx + 60.0, 850.0), Vector2(cx - 60.0, 740.0)]
+	var plats: Array[Dictionary] = []
+	for L in ledges:
+		plats.append({"rect": Rect2(L.x - lw / 2.0, L.y, lw, PLATFORM_HEIGHT), "type": "solid"})
+	var objects: Array[Dictionary] = []
+	for i in range(ledges.size() - 1):
+		var here: Vector2 = ledges[i]
+		var nxt: Vector2 = ledges[i + 1]
+		var dir := 1.0 if nxt.x > here.x else -1.0
+		objects.append({"type": "launcher", "pos": Vector2(here.x, here.y - 7.0),
+			"vel": Vector2(dir * 150.0, -700.0)})
+	return {"platforms": plats, "objects": objects}
 
 
 ## Resolves a map from either a preset id ("arena", "towers") or a random seed.
