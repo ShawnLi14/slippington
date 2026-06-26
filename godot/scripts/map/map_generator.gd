@@ -39,7 +39,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
@@ -60,6 +60,7 @@ const LANDMARK_HALF := {
 	"spring_yard": 100.0,
 	"mast": 140.0,         # crow's nest 280 wide
 	"mill": 150.0,         # 200 belt /2 + 35 offset + 8 jitter
+	"shaft": 120.0,        # side ledges reach cx±118
 }
 
 
@@ -490,6 +491,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _mast(cx, ground_y, rng)
 		"mill":
 			return _mill(cx, rng)
+		"shaft":
+			return _shaft(cx, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -588,6 +591,29 @@ static func _mill(cx: float, rng: SeededRng) -> Dictionary:
 			"type": "solid",
 			"conveyor": {"dir": 1 if i % 2 == 0 else -1, "speed": rng.next_float(110.0, 150.0)},
 		})
+	return {"platforms": plats, "objects": []}
+
+
+## A narrow vertical channel: static side ledges staggered L/R (each a jump
+## apart, so the climb never depends on the lift) plus a y-mover elevator
+## bobbing the center as the express route. The juke is committing to the
+## lift — a mistimed chaser eats a beat.
+static func _shaft(cx: float, rng: SeededRng) -> Dictionary:
+	var plats: Array[Dictionary] = []
+	var lw := 70.0
+	# Staggered side ledges: left, right, left, right — 85-90 px steps.
+	plats.append({"rect": Rect2(cx - 118.0, 945.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	plats.append({"rect": Rect2(cx + 48.0, 855.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	plats.append({"rect": Rect2(cx - 118.0, 760.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	plats.append({"rect": Rect2(cx + 48.0, 668.0, lw, PLATFORM_HEIGHT), "type": "solid"})
+	# Center elevator: y-axis mover, amplitude clamped so the sweep stays in the
+	# channel; 12 px clear of the ledges (ledges start at cx±48, ew/2 = 36).
+	var ew := 72.0
+	plats.append({
+		"rect": Rect2(cx - ew / 2.0, 815.0, ew, PLATFORM_HEIGHT),
+		"type": "solid",
+		"move": {"axis": "y", "amplitude": 110.0, "period": rng.next_float(2.8, 3.6), "phase": rng.next_float(0.0, 1.0)},
+	})
 	return {"platforms": plats, "objects": []}
 
 

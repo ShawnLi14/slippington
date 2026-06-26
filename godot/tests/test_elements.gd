@@ -23,6 +23,7 @@ func _init() -> void:
 	failures += _check("some seed produces an updraft", _test_gen_has_updraft())
 	failures += _check("force_landmark pins column 0", _test_force_landmark())
 	failures += _check("the Mill builds 4 conveyor belts", _test_mill_builds())
+	failures += _check("the Shaft builds a vertical elevator", _test_shaft_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -182,3 +183,16 @@ func _test_mill_builds() -> bool:
 		if r.position.x < 300.0 - 150.0 or r.end.x > 300.0 + 150.0:
 			return false
 	return true
+
+func _test_shaft_builds() -> bool:
+	# The Shaft has static side ledges plus at least one vertical (axis "y")
+	# elevator; everything within HALF (120) of cx.
+	var m := MapGenerator._shaft(500.0, SeededRng.new("s"))
+	var has_ymover := false
+	for p in m["platforms"]:
+		var r: Rect2 = p["rect"]
+		if r.position.x < 500.0 - 120.0 or r.end.x > 500.0 + 120.0:
+			return false
+		if p.get("move", {}).get("axis", "x") == "y":
+			has_ymover = true
+	return has_ymover
