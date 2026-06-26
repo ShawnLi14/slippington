@@ -61,7 +61,7 @@ const LANDMARK_HALF := {
 	"mast": 140.0,         # crow's nest 280 wide
 	"mill": 150.0,         # 200 belt /2 + 35 offset + 8 jitter
 	"shaft": 120.0,        # side ledges reach cx±118
-	"flicker": 120.0,      # rungs reach cx±110
+	"flicker": 120.0,      # rungs reach cx±105
 	"battery": 130.0,      # ledges reach cx±105
 	"geyser": 110.0,       # side ledges reach cx±108
 	"press": 150.0,        # mover sweep reaches cx±140
@@ -742,7 +742,12 @@ static func describe(map_data: Dictionary) -> String:
 			line += " move(%s a=%.0f T=%.1f ph=%.2f)" % [p["move"]["axis"], p["move"]["amplitude"], p["move"]["period"], p["move"]["phase"]]
 		lines.append(line)
 	for o in map_data.get("objects", []):
-		var line := "%s %.0f,%.0f" % [o["type"], o["pos"].x, o["pos"].y]
+		var line := "%s" % o["type"]
+		if o.has("pos"):
+			line += " %.0f,%.0f" % [o["pos"].x, o["pos"].y]
+		elif o.has("rect"):
+			var rr: Rect2 = o["rect"]
+			line += " rect %.0f,%.0f %dx%d" % [rr.position.x, rr.position.y, int(rr.size.x), int(rr.size.y)]
 		if o.has("dest"):
 			line += " -> %.0f,%.0f" % [o["dest"].x, o["dest"].y]
 		lines.append(line)

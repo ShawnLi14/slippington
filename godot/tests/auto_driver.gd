@@ -24,6 +24,7 @@ var bot_class := ""
 
 var map_choice := "arena"
 var shot_event := "tag"
+var forced_landmark := ""
 var rounds_arg := 1
 var _playing_entries := 0
 
@@ -68,6 +69,8 @@ func _ready() -> void:
 			map_choice = arg.trim_prefix("--map=")
 		elif arg.begins_with("--shot-event="):
 			shot_event = arg.trim_prefix("--shot-event=")
+		elif arg.begins_with("--landmark="):
+			forced_landmark = arg.trim_prefix("--landmark=")
 		elif arg.begins_with("--rounds="):
 			rounds_arg = int(arg.trim_prefix("--rounds="))
 			timeout_sec = maxf(timeout_sec, float(rounds_arg) * (timeout_sec * 0.6) + 30.0)
@@ -251,6 +254,15 @@ func _ready() -> void:
 			Input.action_release("ability_primary")
 			_take_screenshot(0.5)
 			return
+		"shot-landmark":
+			# Pin a landmark into column 0 and screenshot the live map so each
+			# new structure can be eyeballed. Usage:
+			#   --auto=shot-landmark --landmark=mill --code=mill.png
+			MapGenerator.force_landmark = forced_landmark
+			NetworkManager.host_lan(port)
+			GameState.host_start_game(map_choice)
+			_take_screenshot(1.5)
+			return
 		"launch-test":
 			# Regression: an angled launcher must retain its horizontal throw in
 			# the air (the planner's launcher arc depends on it). Launch with no
@@ -322,8 +334,11 @@ func _take_screenshot(delay: float) -> void:
 			if child is Control:
 				print("[shot]   child %s rect: %s" % [child.get_class(), child.get_global_rect()])
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(code_file if code_file != "" else "user://shot.png")
-	print("[bot] screenshot saved")
+	if img == null:
+		print("[bot] screenshot skipped (headless/null texture)")
+	else:
+		img.save_png(code_file if code_file != "" else "user://shot.png")
+		print("[bot] screenshot saved")
 	get_tree().quit(0)
 
 

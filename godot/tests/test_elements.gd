@@ -28,6 +28,7 @@ func _init() -> void:
 	failures += _check("the Battery launchers reach their targets", _test_battery_builds())
 	failures += _check("the Geyser updraft reaches a side ledge", _test_geyser_builds())
 	failures += _check("the Press builds a counter-phase pinch pair", _test_press_builds())
+	failures += _check("every forced new landmark stays sound", _test_all_landmarks_forced_sound())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -233,7 +234,7 @@ func _test_battery_builds() -> bool:
 		return false
 	var blockers: Array[Rect2] = []
 	for o in launchers:
-		var support = MapPlanner._support_under({"platforms": ledges}, o["pos"])
+		var support = MapPlanner._support_under({"platforms": ledges}, o["pos"], 20.0)
 		if support == null:
 			return false
 		var hit := false
@@ -286,3 +287,17 @@ func _test_press_builds() -> bool:
 		return false
 	return movers[0]["move"]["pinch"] == movers[1]["move"]["pinch"] \
 		and absf(movers[0]["move"]["phase"] - movers[1]["move"]["phase"]) > 0.4
+
+func _test_all_landmarks_forced_sound() -> bool:
+	# Force each new landmark into column 0 and confirm the whole map stays
+	# reachable + 2-connected across several seeds.
+	for name in ["mill", "shaft", "flicker", "battery", "geyser", "press"]:
+		MapGenerator.force_landmark = name
+		for s in 12:
+			var m := MapGenerator.generate("a3-%s-%d" % [name, s])
+			if not MapPlanner.validate(m).is_empty():
+				MapGenerator.force_landmark = ""
+				print("  forced %s seed %d: %s" % [name, s, MapPlanner.validate(m)])
+				return false
+		MapGenerator.force_landmark = ""
+	return true
