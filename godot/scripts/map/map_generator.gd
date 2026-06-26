@@ -39,7 +39,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker", "battery", "geyser"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker", "battery", "geyser", "press"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
@@ -64,6 +64,7 @@ const LANDMARK_HALF := {
 	"flicker": 120.0,      # rungs reach cx±110
 	"battery": 130.0,      # ledges reach cx±105
 	"geyser": 110.0,       # side ledges reach cx±108
+	"press": 150.0,        # mover sweep reaches cx±140
 }
 
 
@@ -502,6 +503,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _battery(cx, rng)
 		"geyser":
 			return _geyser(cx, ground_y)
+		"press":
+			return _press(cx, ground_y, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -693,6 +696,26 @@ static func _geyser(cx: float, ground_y: float) -> Dictionary:
 		{"type": "updraft", "rect": Rect2(cx - col_w / 2.0, col_top, col_w, base_y - col_top), "accel": 1400.0},
 	]
 	return {"platforms": plats, "objects": objects}
+
+
+## A pinch gate over open ground: two counter-phase movers that meet and part,
+## a closing gap to thread on the beat. The ground beneath them is always
+## reachable, and pinch movers are non-blocking to the planner (the gap opens
+## every cycle), so they gate nothing — pure timing flavor for a chase. Base
+## inner edges at cx±30, amplitude 30 → the gap oscillates 0..120 px and the
+## full sweep reaches cx±140 (within HALF 150). A low footing gives a spawn.
+static func _press(cx: float, ground_y: float, rng: SeededRng) -> Dictionary:
+	var plats: Array[Dictionary] = [
+		{"rect": Rect2(cx - 90.0, 980.0, 180.0, PLATFORM_HEIGHT), "type": "solid"},
+	]
+	var pw := 80.0
+	var amp := 30.0
+	var per := rng.next_float(2.6, 3.4)
+	plats.append({"rect": Rect2(cx - 30.0 - pw, 880.0, pw, PLATFORM_HEIGHT), "type": "solid",
+		"move": {"axis": "x", "amplitude": amp, "period": per, "phase": 0.0, "pinch": int(cx)}})
+	plats.append({"rect": Rect2(cx + 30.0, 880.0, pw, PLATFORM_HEIGHT), "type": "solid",
+		"move": {"axis": "x", "amplitude": amp, "period": per, "phase": 0.5, "pinch": int(cx)}})
+	return {"platforms": plats, "objects": []}
 
 
 ## Resolves a map from either a preset id ("arena", "towers") or a random seed.

@@ -27,6 +27,7 @@ func _init() -> void:
 	failures += _check("the Flicker builds a staggered phase stair", _test_flicker_builds())
 	failures += _check("the Battery launchers reach their targets", _test_battery_builds())
 	failures += _check("the Geyser updraft reaches a side ledge", _test_geyser_builds())
+	failures += _check("the Press builds a counter-phase pinch pair", _test_press_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -268,3 +269,20 @@ func _test_geyser_builds() -> bool:
 		if MapPlanner._updraft_edge_ok(zone, support, b, blockers):
 			return true
 	return false
+
+func _test_press_builds() -> bool:
+	# A pinch pair (two movers sharing a "pinch" group, counter-phase) over open
+	# ground. Verify the pair exists, is counter-phase, and the movers' full
+	# sweep stays within HALF (150) of cx.
+	var m := MapGenerator._press(500.0, 1060.0, SeededRng.new("p"))
+	var movers: Array = []
+	for p in m["platforms"]:
+		if p.get("move", {}).has("pinch"):
+			movers.append(p)
+		var sweep := MapPlanner._sweep_rect(p)
+		if sweep.position.x < 500.0 - 150.0 or sweep.end.x > 500.0 + 150.0:
+			return false
+	if movers.size() != 2:
+		return false
+	return movers[0]["move"]["pinch"] == movers[1]["move"]["pinch"] \
+		and absf(movers[0]["move"]["phase"] - movers[1]["move"]["phase"]) > 0.4
