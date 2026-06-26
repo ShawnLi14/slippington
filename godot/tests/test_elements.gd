@@ -21,6 +21,8 @@ func _init() -> void:
 	failures += _check("updraft lifts to an in-column target", _test_updraft_edge())
 	failures += _check("updraft rejects an out-of-column target", _test_updraft_miss())
 	failures += _check("some seed produces an updraft", _test_gen_has_updraft())
+	failures += _check("force_landmark pins column 0", _test_force_landmark())
+	failures += _check("the Mill builds 4 conveyor belts", _test_mill_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -152,3 +154,31 @@ func _test_gen_has_updraft() -> bool:
 			if o["type"] == "updraft":
 				return true
 	return false
+
+func _test_force_landmark() -> bool:
+	# Forcing a known landmark must place its signature in column 0 (cx≈240).
+	# "pocket" emits wall platforms; without the hook a fixed seed won't put
+	# them in col 0.
+	MapGenerator.force_landmark = "pocket"
+	var m := MapGenerator.generate("a3-force")
+	MapGenerator.force_landmark = ""
+	for p in m["platforms"]:
+		var r: Rect2 = p["rect"]
+		if p["type"] == "wall" and r.position.x + r.size.x / 2.0 < 440.0:
+			return true
+	return false
+
+func _test_mill_builds() -> bool:
+	# The Mill is 4 conveyor belts; every platform stays within HALF (150) of cx
+	# and carries a conveyor.
+	var m := MapGenerator._mill(300.0, SeededRng.new("m"))
+	var plats: Array = m["platforms"]
+	if plats.size() != 4:
+		return false
+	for p in plats:
+		if p.get("conveyor", {}).is_empty():
+			return false
+		var r: Rect2 = p["rect"]
+		if r.position.x < 300.0 - 150.0 or r.end.x > 300.0 + 150.0:
+			return false
+	return true

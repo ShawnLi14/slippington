@@ -39,11 +39,15 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
 static var skip_plan := false
+
+## Debug/test hook: pin this landmark kind into column 0 (and exclude it from
+## the random tail). "" = normal shuffle. Used by unit tests and screenshots.
+static var force_landmark := ""
 
 ## Widest half-extent of each landmark's platforms, used to keep the whole
 ## structure GameConfig.PLATFORM_GAP clear of the map border and of the
@@ -55,6 +59,7 @@ const LANDMARK_HALF := {
 	"ice_rink": 190.0,     # second slab: w2/2 (150) + 40 placement jitter
 	"spring_yard": 100.0,
 	"mast": 140.0,         # crow's nest 280 wide
+	"mill": 150.0,         # 200 belt /2 + 35 offset + 8 jitter
 }
 
 
@@ -83,6 +88,10 @@ static func generate(seed_string: String) -> Dictionary:
 		var tmp = order[i]
 		order[i] = order[j]
 		order[j] = tmp
+
+	if force_landmark != "" and LANDMARKS.has(force_landmark):
+		order.erase(force_landmark)
+		order.push_front(force_landmark)
 
 	var columns := 4  # pool has 5 kinds; the first 4 of the shuffle play
 	var col_w := float(width) / float(columns)
@@ -479,6 +488,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _spring_yard(cx, ground_y, rng)
 		"mast":
 			return _mast(cx, ground_y, rng)
+		"mill":
+			return _mill(cx, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -559,6 +570,25 @@ static func _spring_yard(cx: float, ground_y: float, rng: SeededRng) -> Dictiona
 		{"type": "spring", "pos": Vector2(cx + rng.next_float(-40.0, 40.0), 943.0)},
 	]
 	return {"platforms": plats, "objects": objects}
+
+
+## Stacked conveyor belts running alternate directions: the juke is the
+## counter-belt — lure the chaser onto a belt dragging them the wrong way
+## while you ride yours. Open stack with horizontal offsets (no walls), so
+## nothing corners you; every level is a jump apart.
+static func _mill(cx: float, rng: SeededRng) -> Dictionary:
+	var plats: Array[Dictionary] = []
+	var w := 200.0
+	var levels := [960.0, 860.0, 760.0, 660.0]
+	var side := 1.0 if rng.next() < 0.5 else -1.0
+	for i in levels.size():
+		var off := side * (35.0 if i % 2 == 0 else -35.0) + rng.next_float(-8.0, 8.0)
+		plats.append({
+			"rect": Rect2(cx + off - w / 2.0, levels[i], w, PLATFORM_HEIGHT),
+			"type": "solid",
+			"conveyor": {"dir": 1 if i % 2 == 0 else -1, "speed": rng.next_float(110.0, 150.0)},
+		})
+	return {"platforms": plats, "objects": []}
 
 
 ## Resolves a map from either a preset id ("arena", "towers") or a random seed.
