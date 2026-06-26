@@ -39,7 +39,7 @@ const LANDMARK_TOP := 640.0
 
 ## Five landmark kinds, four columns: each map shuffles the pool and takes
 ## the first four, so every map is missing a different one.
-const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft"]
+const LANDMARKS := ["scaffold", "pocket", "ice_rink", "spring_yard", "mast", "mill", "shaft", "flicker"]
 
 ## Debug/test hook: when true, generate() returns the raw map without the
 ## planner's validation/repair pass.
@@ -61,6 +61,7 @@ const LANDMARK_HALF := {
 	"mast": 140.0,         # crow's nest 280 wide
 	"mill": 150.0,         # 200 belt /2 + 35 offset + 8 jitter
 	"shaft": 120.0,        # side ledges reach cx±118
+	"flicker": 120.0,      # rungs reach cx±110
 }
 
 
@@ -493,6 +494,8 @@ static func _build_landmark(kind: String, cx: float, ground_y: float, rng: Seede
 			return _mill(cx, rng)
 		"shaft":
 			return _shaft(cx, rng)
+		"flicker":
+			return _flicker(cx, rng)
 	return {"platforms": [], "objects": []}
 
 
@@ -614,6 +617,30 @@ static func _shaft(cx: float, rng: SeededRng) -> Dictionary:
 		"type": "solid",
 		"move": {"axis": "y", "amplitude": 110.0, "period": rng.next_float(2.8, 3.6), "phase": rng.next_float(0.0, 1.0)},
 	})
+	return {"platforms": plats, "objects": []}
+
+
+## A rising stair of phase platforms whose solid windows are offset by a
+## quarter-cycle each, so the foothold rolls upward like a wave. Solid anchors
+## at base and top guarantee a foothold. The juke: ride the window up; mistime
+## and the next rung is intangible — you fall through and reset. To the planner
+## phase rungs are landing-yes (you can wait for solid) and block-no.
+static func _flicker(cx: float, rng: SeededRng) -> Dictionary:
+	var plats: Array[Dictionary] = []
+	# Solid base anchor.
+	plats.append({"rect": Rect2(cx - 60.0, 960.0, 120.0, PLATFORM_HEIGHT), "type": "solid"})
+	var period := rng.next_float(1.8, 2.4)
+	var rw := 100.0
+	var steps := [Vector2(cx - 55.0, 860.0), Vector2(cx + 15.0, 770.0), Vector2(cx - 55.0, 700.0)]
+	for i in steps.size():
+		var s: Vector2 = steps[i]
+		plats.append({
+			"rect": Rect2(s.x - rw / 2.0, s.y, rw, PLATFORM_HEIGHT),
+			"type": "solid",
+			"phase": {"period": period, "duty": 0.55, "offset": float(i) * period * 0.25},
+		})
+	# Solid top anchor lands the climb (a connector seed at y ≤ 760).
+	plats.append({"rect": Rect2(cx - 50.0, 640.0, 100.0, PLATFORM_HEIGHT), "type": "solid"})
 	return {"platforms": plats, "objects": []}
 
 

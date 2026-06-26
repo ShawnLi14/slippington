@@ -24,6 +24,7 @@ func _init() -> void:
 	failures += _check("force_landmark pins column 0", _test_force_landmark())
 	failures += _check("the Mill builds 4 conveyor belts", _test_mill_builds())
 	failures += _check("the Shaft builds a vertical elevator", _test_shaft_builds())
+	failures += _check("the Flicker builds a staggered phase stair", _test_flicker_builds())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -196,3 +197,16 @@ func _test_shaft_builds() -> bool:
 		if p.get("move", {}).get("axis", "x") == "y":
 			has_ymover = true
 	return has_ymover
+
+func _test_flicker_builds() -> bool:
+	# A rising stair of phase rungs with staggered offsets (a rolling window),
+	# plus solid anchors. Needs ≥3 phase platforms whose offsets differ.
+	var m := MapGenerator._flicker(500.0, SeededRng.new("f"))
+	var offsets := {}
+	for p in m["platforms"]:
+		var r: Rect2 = p["rect"]
+		if r.position.x < 500.0 - 120.0 or r.end.x > 500.0 + 120.0:
+			return false
+		if p.has("phase"):
+			offsets[p["phase"]["offset"]] = true
+	return offsets.size() >= 3
