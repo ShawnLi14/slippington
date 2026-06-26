@@ -606,10 +606,13 @@ static func _mill(cx: float, rng: SeededRng) -> Dictionary:
 	return {"platforms": plats, "objects": []}
 
 
-## A narrow vertical channel: static side ledges staggered L/R (each a jump
-## apart, so the climb never depends on the lift) plus a y-mover elevator
-## bobbing the center as the express route. The juke is committing to the
-## lift — a mistimed chaser eats a beat.
+## A narrow vertical channel: static side ledges staggered L/R plus a y-mover
+## elevator bobbing the center as the express route. The juke is committing to
+## the lift — a mistimed chaser eats a beat. NOTE: the side ledges and elevator
+## are additive express/secondary routes, but reachability of the UPPER pieces
+## leans on the connector web above the landmark rather than purely internal
+## steps — re-verify internal reachability when Phase A4 reduces connector
+## density or pairs landmarks.
 static func _shaft(cx: float, rng: SeededRng) -> Dictionary:
 	var plats: Array[Dictionary] = []
 	var lw := 70.0
@@ -633,7 +636,11 @@ static func _shaft(cx: float, rng: SeededRng) -> Dictionary:
 ## quarter-cycle each, so the foothold rolls upward like a wave. Solid anchors
 ## at base and top guarantee a foothold. The juke: ride the window up; mistime
 ## and the next rung is intangible — you fall through and reset. To the planner
-## phase rungs are landing-yes (you can wait for solid) and block-no.
+## phase rungs are landing-yes (you can wait for solid) and block-no. NOTE: the
+## solid top anchor and upper rungs rely on the external connector web for
+## reachability (the solid top anchor blocks the rung1→rung2 internal jump) —
+## re-verify internal reachability when Phase A4 reduces connector density or
+## pairs landmarks.
 static func _flicker(cx: float, rng: SeededRng) -> Dictionary:
 	var plats: Array[Dictionary] = []
 	# Solid base anchor.
@@ -711,6 +718,10 @@ static func _press(cx: float, ground_y: float, rng: SeededRng) -> Dictionary:
 	var pw := 80.0
 	var amp := 30.0
 	var per := rng.next_float(2.6, 3.4)
+	# Pinch id = int(cx), position-derived. The global connector gate uses
+	# int(mid) (mid ∈ [680,760] y-band); the Press sits at y=880, so the two
+	# never share a y-band and are safe today. If Phase A4 adds more pinch
+	# sources, give each pinch group a collision-safe id instead.
 	plats.append({"rect": Rect2(cx - 30.0 - pw, 880.0, pw, PLATFORM_HEIGHT), "type": "solid",
 		"move": {"axis": "x", "amplitude": amp, "period": per, "phase": 0.0, "pinch": int(cx)}})
 	plats.append({"rect": Rect2(cx + 30.0, 880.0, pw, PLATFORM_HEIGHT), "type": "solid",

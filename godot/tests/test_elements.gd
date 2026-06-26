@@ -29,6 +29,7 @@ func _init() -> void:
 	failures += _check("the Geyser updraft reaches a side ledge", _test_geyser_builds())
 	failures += _check("the Press builds a counter-phase pinch pair", _test_press_builds())
 	failures += _check("every forced new landmark stays sound", _test_all_landmarks_forced_sound())
+	failures += _check("forced landmark features survive planning", _test_forced_landmark_features_survive())
 	if failures > 0:
 		print("FAILED: %d test(s)" % failures)
 		quit(1)
@@ -300,4 +301,53 @@ func _test_all_landmarks_forced_sound() -> bool:
 				print("  forced %s seed %d: %s" % [name, s, MapPlanner.validate(m)])
 				return false
 		MapGenerator.force_landmark = ""
+	return true
+
+func _test_forced_landmark_features_survive() -> bool:
+	# plan() can scrub a launcher/updraft or delete a repaired ledge, leaving a
+	# landmark sound but feature-less; validate() flags only present-and-invalid
+	# objects, so it can't catch that. Force each landmark and assert its
+	# signature element SURVIVES planning in column 0 (center-x < col_w; salting
+	# in other columns is out of band).
+	var cw := float(GameConfig.MAP_WIDTH) / 4.0
+	var specs := [
+		["mill", "platform_key", "conveyor", 1],
+		["shaft", "ymover", "", 1],
+		["flicker", "platform_key", "phase", 1],
+		["battery", "object", "launcher", 1],
+		["geyser", "object", "updraft", 1],
+		["press", "pinch", "", 2],
+	]
+	for spec in specs:
+		MapGenerator.force_landmark = spec[0]
+		var worst := 999
+		for s in 8:
+			var m := MapGenerator.generate("fs-%s-%d" % [spec[0], s])
+			var n := 0
+			match spec[1]:
+				"platform_key":
+					for p in m["platforms"]:
+						var r: Rect2 = p["rect"]
+						if r.get_center().x < cw and not p.get(spec[2], {}).is_empty():
+							n += 1
+				"ymover":
+					for p in m["platforms"]:
+						var r: Rect2 = p["rect"]
+						if r.get_center().x < cw and p.get("move", {}).get("axis", "x") == "y":
+							n += 1
+				"object":
+					for o in m.get("objects", []):
+						var ox: float = o["pos"].x if o.has("pos") else o["rect"].get_center().x
+						if ox < cw and o["type"] == spec[2]:
+							n += 1
+				"pinch":
+					for p in m["platforms"]:
+						var r: Rect2 = p["rect"]
+						if r.get_center().x < cw and p.get("move", {}).has("pinch"):
+							n += 1
+			worst = mini(worst, n)
+		MapGenerator.force_landmark = ""
+		if worst < int(spec[3]):
+			print("  feature-survive FAIL: %s only %d in col0" % [spec[0], worst])
+			return false
 	return true
