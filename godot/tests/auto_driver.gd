@@ -750,19 +750,36 @@ func _run_update_dryrun() -> void:
 	_rm_tree(root)
 	DirAccess.make_dir_recursive_absolute(root)
 
-	# 1) cleanup_leftovers removes *.old artifacts.
+	# 1a) cleanup_leftovers reaps *.old artifacts WHEN the live binary exists.
 	var c := root.path_join("cleanup")
 	DirAccess.make_dir_recursive_absolute(c.path_join("Slippington.app.old"))
+	DirAccess.make_dir_recursive_absolute(c.path_join("Slippington.app"))
+	_put(c.path_join("Slippington.exe"), "live")
+	_put(c.path_join("Slippington.console.exe"), "live")
 	_put(c.path_join("Slippington.old.exe"), "x")
 	_put(c.path_join("Slippington.console.old.exe"), "x")
 	_put(c.path_join("Slippington.app.old").path_join("f"), "x")
+	_put(c.path_join("Slippington.app").path_join("f"), "live")
 	Updater.cleanup_leftovers(c)
 	if FileAccess.file_exists(c.path_join("Slippington.old.exe")) \
 			or FileAccess.file_exists(c.path_join("Slippington.console.old.exe")) \
 			or DirAccess.dir_exists_absolute(c.path_join("Slippington.app.old")):
-		print("FAIL dryrun: leftovers not cleaned"); fails += 1
+		print("FAIL dryrun: leftovers not cleaned (live present)"); fails += 1
 	else:
 		print("PASS dryrun: leftovers cleaned")
+
+	# 1b) cleanup_leftovers PRESERVES a *.old when its live binary is MISSING
+	# (double-fault recovery — never reap the sole surviving copy).
+	var c2 := root.path_join("cleanup_orphan")
+	DirAccess.make_dir_recursive_absolute(c2.path_join("Slippington.app.old"))
+	_put(c2.path_join("Slippington.old.exe"), "sole")
+	_put(c2.path_join("Slippington.app.old").path_join("f"), "sole")
+	Updater.cleanup_leftovers(c2)
+	if FileAccess.file_exists(c2.path_join("Slippington.old.exe")) \
+			and DirAccess.dir_exists_absolute(c2.path_join("Slippington.app.old")):
+		print("PASS dryrun: leftovers preserved when live missing")
+	else:
+		print("FAIL dryrun: orphan .old wrongly reaped"); fails += 1
 
 	# 2) Windows swap happy path via install_from_zip(fixture).
 	var w := root.path_join("win")

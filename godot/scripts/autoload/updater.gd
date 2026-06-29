@@ -54,14 +54,23 @@ func _on_check_completed(http: HTTPRequest, result: int, code: int, _headers: Pa
 	update_available.emit(info)
 
 
-## Delete *.old leftovers a previous successful self-update left behind.
+## Delete *.old leftovers a previous successful self-update left behind — but
+## ONLY when the corresponding LIVE binary exists. If a swap double-faulted and
+## the live binary survives only as its .old backup, reaping it would turn a
+## recoverable failure into a permanent brick; leave it for manual recovery.
 func cleanup_leftovers(dir: String) -> void:
-	for name in ["Slippington.old.exe", "Slippington.console.old.exe"]:
-		var p := dir.path_join(name)
-		if FileAccess.file_exists(p):
-			DirAccess.remove_absolute(p)
+	var exe_pairs := {
+		"Slippington.old.exe": "Slippington.exe",
+		"Slippington.console.old.exe": "Slippington.console.exe",
+	}
+	for old_name in exe_pairs:
+		var old_p := dir.path_join(old_name)
+		var live_p := dir.path_join(exe_pairs[old_name])
+		if FileAccess.file_exists(old_p) and FileAccess.file_exists(live_p):
+			DirAccess.remove_absolute(old_p)
 	var app_old := dir.path_join("Slippington.app.old")
-	if DirAccess.dir_exists_absolute(app_old):
+	var app_live := dir.path_join("Slippington.app")
+	if DirAccess.dir_exists_absolute(app_old) and DirAccess.dir_exists_absolute(app_live):
 		if OS.has_feature("macos"):
 			OS.execute("rm", ["-rf", app_old])  # robust for .app bundles (symlinks)
 		else:
