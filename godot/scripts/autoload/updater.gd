@@ -208,12 +208,14 @@ signal update_progress(downloaded: int, total: int)
 signal update_failed(message: String)
 
 var _dl: HTTPRequest
-var _expected_size := 0
-var _zip_path := ""
+var _expected_size: int = 0
+var _zip_path: String = ""
 
 
 ## User pressed "Update Now": pre-flight, download, install, relaunch.
 func begin_update(asset_url: String, asset_size: int) -> void:
+	if _dl != null:
+		return  # a download is already in flight; ignore re-entry
 	var install := _install_dir()
 	if not _dir_writable(install):
 		update_failed.emit("Can't write to the install folder — download the update manually.")
@@ -238,20 +240,33 @@ func _process(_delta: float) -> void:
 func _on_download_completed(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	_dl.queue_free()
 	_dl = null
-	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		update_failed.emit("Download failed (HTTP %d) — try again or download manually." % code)
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_fail_download("Network error during download — check your connection and try again.")
+		return
+	if code != 200:
+		_fail_download("Download failed (HTTP %d) — try again or download manually." % code)
 		return
 	var f := FileAccess.open(_zip_path, FileAccess.READ)
 	var got := int(f.get_length()) if f != null else 0
 	if f != null:
 		f.close()
-	if _expected_size > 0 and got != _expected_size:
-		update_failed.emit("Download was incomplete — try again.")
+	# Always size-verify: a 0/unknown expected size means we CAN'T trust the
+	# bytes, so we refuse rather than install unverified (safety invariant).
+	if _expected_size <= 0 or got != _expected_size:
+		_fail_download("Download was incomplete or unverifiable — try again.")
 		return
 	if not install_from_zip(_zip_path, _install_dir()):
-		update_failed.emit("Couldn't apply the update — download manually.")
+		_fail_download("Couldn't apply the update — download manually.")
 		return
 	_relaunch()
+
+
+## Emit a failure message and discard the partial/failed download so stale
+## bytes don't pile up in the cache. The install itself was never touched.
+func _fail_download(message: String) -> void:
+	if _zip_path != "" and FileAccess.file_exists(_zip_path):
+		DirAccess.remove_absolute(_zip_path)
+	update_failed.emit(message)
 
 
 ## A nonexistent / read-only dir returns false (caught before any swap).
