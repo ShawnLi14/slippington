@@ -16,9 +16,9 @@ signal update_available(info: Dictionary)
 var available_update: Dictionary = {}
 
 func _ready() -> void:
-	cleanup_leftovers(_install_dir())
 	if OS.has_feature("web"):
 		return
+	cleanup_leftovers(_install_dir())
 	# Headless test/driver runs pass --auto=... ; don't hit the network there.
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--auto="):
@@ -117,21 +117,28 @@ func extract_zip(zip_path: String, staging: String) -> bool:
 				continue
 			var out := staging.path_join(n)
 			DirAccess.make_dir_recursive_absolute(out.get_base_dir())
-			_write_bytes(out, reader.read_file(n))
+			if not _write_bytes(out, reader.read_file(n)):
+				reader.close()
+				return false
 			got = true
 		else:
 			var base := n.get_file()
 			if base == "Slippington.exe" or base == "Slippington.console.exe":
-				_write_bytes(staging.path_join(base), reader.read_file(n))
+				if not _write_bytes(staging.path_join(base), reader.read_file(n)):
+					reader.close()
+					return false
 				got = true
 	reader.close()
 	return got
 
 
-func _write_bytes(path: String, data: PackedByteArray) -> void:
+func _write_bytes(path: String, data: PackedByteArray) -> bool:
 	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
 	f.store_buffer(data)
 	f.close()
+	return true
 
 
 ## Replace the installed Windows exe(s) with the staged ones. On any failure,

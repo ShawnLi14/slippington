@@ -865,6 +865,23 @@ func _run_update_dryrun() -> void:
 	else:
 		print("FAIL dryrun: write probe"); fails += 1
 
+	# clean abort: a zip with no platform binaries → install_from_zip returns
+	# false and the existing install is left untouched (invariant's abort branch).
+	var ca := root.path_join("cleanabort")
+	DirAccess.make_dir_recursive_absolute(ca)
+	_put(ca.path_join("Slippington.exe"), "LIVEEXE")
+	_put(ca.path_join("Slippington.console.exe"), "LIVECON")
+	var badzip := root.path_join("fixture-bad.zip")
+	_make_zip(badzip, {"README.txt": "nothing relevant here"})
+	Updater.test_fail_on = ""
+	if not Updater.install_from_zip(badzip, ca) \
+			and _read(ca.path_join("Slippington.exe")) == "LIVEEXE" \
+			and _read(ca.path_join("Slippington.console.exe")) == "LIVECON" \
+			and not FileAccess.file_exists(ca.path_join("Slippington.old.exe")):
+		print("PASS dryrun: clean abort on irrelevant zip")
+	else:
+		print("FAIL dryrun: clean abort"); fails += 1
+
 	_rm_tree(root)
 	if fails == 0:
 		print("[bot update-dryrun] ALL CHECKS PASSED"); get_tree().quit(0)
