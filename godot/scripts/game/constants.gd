@@ -4,6 +4,12 @@ class_name GameConfig
 const MAP_WIDTH := 1920
 const MAP_HEIGHT := 1080
 
+## The running game version — single source of truth for the menu label, the
+## host-authoritative join gate, and the auto-update check. BUMP THIS every
+## release (and keep export_presets.cfg's version fields in sync). A forgotten
+## bump makes the new build reject same-release joiners.
+const GAME_VERSION := "2.1.0"
+
 const GRAVITY := 800.0
 const JUMP_VELOCITY := -450.0
 const PLAYER_SPEED := 300.0
