@@ -77,3 +77,26 @@ godot --headless --path . -- --auto=join-online --code-file=/tmp/code.txt --sign
 ```
 
 Each instance prints PASS/FAIL per check and exits 0 only if all pass.
+
+Version / update-check unit tests:
+
+```
+godot --headless --path . --script res://tests/test_version.gd
+```
+
+Version-gate + auto-update swap-engine driver tests (headless):
+
+```
+godot --headless --path . -- --auto=host-idle --port=7811
+godot --headless --path . -- --auto=join-badversion --port=7811 --force-version=9.9.9
+godot --headless --path . -- --auto=update-dryrun
+```
+
+## Releasing — version bump
+
+`GameConfig.GAME_VERSION` (`scripts/game/constants.gd`) is the single source of
+truth for the version label, the join gate, and the auto-update check. **Before
+every release, bump it** and keep `export_presets.cfg`'s macOS
+`application/version` / `application/short_version` in sync. A forgotten bump
+makes the new build reject same-release joiners and never see itself as "up to
+date". The git tag (`vX.Y.Z`) must match `GAME_VERSION` (`X.Y.Z`).
