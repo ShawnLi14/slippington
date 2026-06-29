@@ -122,6 +122,11 @@ func extract_zip(zip_path: String, staging: String) -> bool:
 				return false
 			got = true
 		else:
+			# Windows auto-update swaps only the embedded-PCK executable(s).
+			# Sidecar native libs (e.g. the webrtc .dll) are NOT propagated — a
+			# release that changes the GDExtension must ship as a manual full-zip
+			# download, not via auto-update. See README "Releasing". macOS is
+			# unaffected (the whole .app, framework included, is swapped).
 			var base := n.get_file()
 			if base == "Slippington.exe" or base == "Slippington.console.exe":
 				if not _write_bytes(staging.path_join(base), reader.read_file(n)):

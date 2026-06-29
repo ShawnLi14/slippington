@@ -100,3 +100,12 @@ every release, bump it** and keep `export_presets.cfg`'s macOS
 `application/version` / `application/short_version` in sync. A forgotten bump
 makes the new build reject same-release joiners and never see itself as "up to
 date". The git tag (`vX.Y.Z`) must match `GAME_VERSION` (`X.Y.Z`).
+
+**Auto-update scope (Windows):** the Windows auto-update swaps only the
+executable(s) (`Slippington.exe` / `Slippington.console.exe`); it does NOT
+replace sidecar native libraries such as the bundled `webrtc` DLL. For an
+ordinary content release the DLL is byte-identical, so this is invisible — but
+a release that updates the `webrtc`/`godot-cpp` GDExtension must be shipped as a
+manual full-zip download (don't rely on auto-update for it), or online play will
+break on a partially-updated install. macOS is unaffected: it swaps the whole
+`Slippington.app`, framework included.
