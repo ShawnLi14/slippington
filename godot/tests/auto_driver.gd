@@ -91,6 +91,10 @@ func _ready() -> void:
 	if forced_version != "":
 		GameState.version_override = forced_version
 
+	if mode == "update-dryrun":
+		_run_update_dryrun()
+		return
+
 	var is_host := mode.begins_with("host")
 	if mode == "host-deaf" or mode == "join-deaf":
 		# Watchdog test: the deaf host opens a real room on the signaling
@@ -704,3 +708,130 @@ func _finish() -> void:
 	else:
 		print("[bot %s] FAILED CHECKS: %s" % [mode, ", ".join(failed)])
 		get_tree().quit(1)
+
+
+# --- update-dryrun: exercises Updater's swap engine on scratch dirs ----------
+# Both Windows and macOS swap logic are pure path-ops, so BOTH are testable on
+# any host OS (chmod is best-effort and no-ops off macOS).
+
+func _put(path: String, text: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+
+func _read(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	return FileAccess.get_file_as_string(path)
+
+func _rm_tree(path: String) -> void:
+	var d := DirAccess.open(path)
+	if d == null:
+		return
+	d.include_hidden = true
+	for f in d.get_files():
+		d.remove(f)
+	for sub in d.get_directories():
+		_rm_tree(path.path_join(sub))
+	DirAccess.remove_absolute(path)
+
+func _make_zip(zip_path: String, entries: Dictionary) -> void:
+	var packer := ZIPPacker.new()
+	packer.open(zip_path)
+	for name in entries:
+		packer.start_file(name)
+		packer.write_file((entries[name] as String).to_utf8_buffer())
+		packer.close_file()
+	packer.close()
+
+func _run_update_dryrun() -> void:
+	var fails := 0
+	var root := OS.get_cache_dir().path_join("slip_dryrun")
+	_rm_tree(root)
+	DirAccess.make_dir_recursive_absolute(root)
+
+	# 1) cleanup_leftovers removes *.old artifacts.
+	var c := root.path_join("cleanup")
+	DirAccess.make_dir_recursive_absolute(c.path_join("Slippington.app.old"))
+	_put(c.path_join("Slippington.old.exe"), "x")
+	_put(c.path_join("Slippington.console.old.exe"), "x")
+	_put(c.path_join("Slippington.app.old").path_join("f"), "x")
+	Updater.cleanup_leftovers(c)
+	if FileAccess.file_exists(c.path_join("Slippington.old.exe")) \
+			or FileAccess.file_exists(c.path_join("Slippington.console.old.exe")) \
+			or DirAccess.dir_exists_absolute(c.path_join("Slippington.app.old")):
+		print("FAIL dryrun: leftovers not cleaned"); fails += 1
+	else:
+		print("PASS dryrun: leftovers cleaned")
+
+	# 2) Windows swap happy path via install_from_zip(fixture).
+	var w := root.path_join("win")
+	DirAccess.make_dir_recursive_absolute(w)
+	_put(w.path_join("Slippington.exe"), "OLDEXE")
+	_put(w.path_join("Slippington.console.exe"), "OLDCON")
+	var zip := root.path_join("fixture-win.zip")
+	_make_zip(zip, {"Slippington.exe": "NEWEXE", "Slippington.console.exe": "NEWCON", "HOW_TO_PLAY.txt": "ignore me"})
+	Updater.test_fail_on = ""
+	if Updater.install_from_zip(zip, w) \
+			and _read(w.path_join("Slippington.exe")) == "NEWEXE" \
+			and _read(w.path_join("Slippington.console.exe")) == "NEWCON" \
+			and _read(w.path_join("Slippington.old.exe")) == "OLDEXE":
+		print("PASS dryrun: windows swap + backup")
+	else:
+		print("FAIL dryrun: windows swap"); fails += 1
+
+	# 3) Windows restore-on-failure (inject a mid-swap failure on the 2nd file).
+	var wr := root.path_join("winr")
+	var st := wr.path_join(".stage")
+	DirAccess.make_dir_recursive_absolute(st)
+	_put(wr.path_join("Slippington.exe"), "OLDEXE")
+	_put(wr.path_join("Slippington.console.exe"), "OLDCON")
+	_put(st.path_join("Slippington.exe"), "NEWEXE")
+	_put(st.path_join("Slippington.console.exe"), "NEWCON")
+	Updater.test_fail_on = "Slippington.console.exe"
+	var w_ok := Updater.apply_windows_swap(wr, st)
+	Updater.test_fail_on = ""
+	if not w_ok \
+			and _read(wr.path_join("Slippington.exe")) == "OLDEXE" \
+			and _read(wr.path_join("Slippington.console.exe")) == "OLDCON" \
+			and not FileAccess.file_exists(wr.path_join("Slippington.old.exe")):
+		print("PASS dryrun: windows restore-on-failure")
+	else:
+		print("FAIL dryrun: windows restore"); fails += 1
+
+	# 4) macOS swap happy path (call apply_macos_swap directly).
+	var m := root.path_join("mac")
+	var m_inner := "Slippington.app/Contents/MacOS/Slippington"
+	var ms := m.path_join(".stage")
+	DirAccess.make_dir_recursive_absolute(m.path_join("Slippington.app/Contents/MacOS"))
+	DirAccess.make_dir_recursive_absolute(ms.path_join("Slippington.app/Contents/MacOS"))
+	_put(m.path_join(m_inner), "OLDAPP")
+	_put(ms.path_join(m_inner), "NEWAPP")
+	Updater.test_fail_on = ""
+	if Updater.apply_macos_swap(m, ms) \
+			and _read(m.path_join(m_inner)) == "NEWAPP" \
+			and _read(m.path_join("Slippington.app.old/Contents/MacOS/Slippington")) == "OLDAPP":
+		print("PASS dryrun: macos swap + backup")
+	else:
+		print("FAIL dryrun: macos swap"); fails += 1
+
+	# 5) macOS restore-on-failure.
+	var mr := root.path_join("macr")
+	var mrs := mr.path_join(".stage")
+	DirAccess.make_dir_recursive_absolute(mr.path_join("Slippington.app/Contents/MacOS"))
+	DirAccess.make_dir_recursive_absolute(mrs.path_join("Slippington.app/Contents/MacOS"))
+	_put(mr.path_join(m_inner), "OLDAPP")
+	_put(mrs.path_join(m_inner), "NEWAPP")
+	Updater.test_fail_on = "macos"
+	var m_ok := Updater.apply_macos_swap(mr, mrs)
+	Updater.test_fail_on = ""
+	if not m_ok and _read(mr.path_join(m_inner)) == "OLDAPP":
+		print("PASS dryrun: macos restore-on-failure")
+	else:
+		print("FAIL dryrun: macos restore"); fails += 1
+
+	_rm_tree(root)
+	if fails == 0:
+		print("[bot update-dryrun] ALL CHECKS PASSED"); get_tree().quit(0)
+	else:
+		print("[bot update-dryrun] FAILED: %d" % fails); get_tree().quit(1)

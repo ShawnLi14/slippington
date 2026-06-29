@@ -80,6 +80,111 @@ func _rm_rf(path: String) -> void:
 	d.include_hidden = true
 	for f in d.get_files():
 		d.remove(f)
-	for sub in d.get_dirs():
+	for sub in d.get_directories():
 		_rm_rf(path.path_join(sub))
 	DirAccess.remove_absolute(path)
+
+
+# --- self-replace engine ------------------------------------------------------
+
+## Test-only: set to a basename ("Slippington.console.exe") or "macos" to force
+## a mid-swap failure and exercise the restore path. Empty in normal play.
+var test_fail_on := ""
+
+
+## Extract the platform's new binaries from a release zip into `staging` (created
+## fresh). Windows: the exe(s), flat. macOS: the whole Slippington.app/ subtree.
+func extract_zip(zip_path: String, staging: String) -> bool:
+	var reader := ZIPReader.new()
+	if reader.open(zip_path) != OK:
+		return false
+	DirAccess.make_dir_recursive_absolute(staging)
+	var got := false
+	for n in reader.get_files():
+		if n.ends_with("/"):
+			continue
+		if OS.has_feature("macos"):
+			if not n.begins_with("Slippington.app/"):
+				continue
+			var out := staging.path_join(n)
+			DirAccess.make_dir_recursive_absolute(out.get_base_dir())
+			_write_bytes(out, reader.read_file(n))
+			got = true
+		else:
+			var base := n.get_file()
+			if base == "Slippington.exe" or base == "Slippington.console.exe":
+				_write_bytes(staging.path_join(base), reader.read_file(n))
+				got = true
+	reader.close()
+	return got
+
+
+func _write_bytes(path: String, data: PackedByteArray) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_buffer(data)
+	f.close()
+
+
+## Replace the installed Windows exe(s) with the staged ones. On any failure,
+## restores from the .old backups and returns false (install left unchanged).
+func apply_windows_swap(install_dir: String, staging: String) -> bool:
+	var renamed: Array = []   # [[orig, old]] to undo renames on failure
+	var written: Array = []   # [orig] new files written so far
+	for base in ["Slippington.exe", "Slippington.console.exe"]:
+		var staged := staging.path_join(base)
+		if not FileAccess.file_exists(staged):
+			continue
+		var orig := install_dir.path_join(base)
+		var old := install_dir.path_join(base.replace(".exe", ".old.exe"))
+		if FileAccess.file_exists(orig):
+			if DirAccess.rename_absolute(orig, old) != OK:
+				_restore_windows(renamed, written); return false
+			renamed.append([orig, old])
+		if base == test_fail_on or DirAccess.copy_absolute(staged, orig) != OK:
+			_restore_windows(renamed, written); return false
+		written.append(orig)
+	return true
+
+
+func _restore_windows(renamed: Array, written: Array) -> void:
+	for orig in written:
+		DirAccess.remove_absolute(orig)
+	for pair in renamed:
+		DirAccess.rename_absolute(pair[1], pair[0])
+
+
+## Replace the installed Slippington.app with the staged one (chmod +x the inner
+## binary; best-effort). On failure, restores the backup and returns false.
+func apply_macos_swap(install_dir: String, staging: String) -> bool:
+	var staged_app := staging.path_join("Slippington.app")
+	if not DirAccess.dir_exists_absolute(staged_app):
+		return false
+	OS.execute("chmod", ["+x", staged_app.path_join("Contents/MacOS/Slippington")])
+	var orig := install_dir.path_join("Slippington.app")
+	var backup := install_dir.path_join("Slippington.app.old")
+	if DirAccess.dir_exists_absolute(backup):
+		_rm_rf(backup)
+	var had_orig := DirAccess.dir_exists_absolute(orig)
+	if had_orig and DirAccess.rename_absolute(orig, backup) != OK:
+		return false
+	if test_fail_on == "macos" or DirAccess.rename_absolute(staged_app, orig) != OK:
+		if had_orig:
+			DirAccess.rename_absolute(backup, orig)
+		return false
+	return true
+
+
+## Extract `zip_path` and swap it into `install_dir`. Returns true on success
+## (the caller may then relaunch). Install is left untouched on any failure.
+func install_from_zip(zip_path: String, install_dir: String) -> bool:
+	var staging := install_dir.path_join(".slip_update")
+	_rm_rf(staging)
+	if not extract_zip(zip_path, staging):
+		_rm_rf(staging); return false
+	var ok: bool
+	if OS.has_feature("macos"):
+		ok = apply_macos_swap(install_dir, staging)
+	else:
+		ok = apply_windows_swap(install_dir, staging)
+	_rm_rf(staging)
+	return ok
