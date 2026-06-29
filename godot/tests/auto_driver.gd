@@ -26,6 +26,7 @@ var map_choice := "arena"
 var shot_event := "tag"
 var forced_landmark := ""
 var rounds_arg := 1
+var forced_version := ""
 var _playing_entries := 0
 
 var _jump_cooldown := 0.0
@@ -74,6 +75,8 @@ func _ready() -> void:
 		elif arg.begins_with("--rounds="):
 			rounds_arg = int(arg.trim_prefix("--rounds="))
 			timeout_sec = maxf(timeout_sec, float(rounds_arg) * (timeout_sec * 0.6) + 30.0)
+		elif arg.begins_with("--force-version="):
+			forced_version = arg.trim_prefix("--force-version=")
 		elif arg.begins_with("--class="):
 			bot_class = arg.trim_prefix("--class=")
 		elif arg.begins_with("--connect-timeout="):
@@ -84,6 +87,9 @@ func _ready() -> void:
 		elif arg.begins_with("--match-seconds="):
 			# The clock only starts at the first tag — leave generous slack.
 			timeout_sec = float(arg.trim_prefix("--match-seconds=")) + 45.0
+
+	if forced_version != "":
+		GameState.version_override = forced_version
 
 	var is_host := mode.begins_with("host")
 	if mode == "host-deaf" or mode == "join-deaf":
@@ -104,6 +110,14 @@ func _ready() -> void:
 			_checks["no_self_tag"] = false
 			bot_class = "swapper"
 		timeout_sec = 25.0
+	elif mode == "host-idle":
+		# Minimal reject-capable host for the version-gate test: just stays up.
+		_checks = {}
+		timeout_sec = 12.0
+	elif mode == "join-badversion":
+		# Joins with a deliberately-wrong version; must be bounced to the menu.
+		_checks = {"got_rejected": false}
+		timeout_sec = 20.0
 	else:
 		_checks = {
 			"session": false,
@@ -141,9 +155,15 @@ func _ready() -> void:
 			else:
 				_fail("unexpected failure reason: " + reason)
 		)
-	elif mode != "join-bad-online":
+	elif mode != "join-bad-online" and mode != "join-badversion":
 		# (join-bad-online expects its first attempt to fail.)
 		NetworkManager.session_failed.connect(func(reason): _fail("session failed: " + reason))
+	if mode == "join-badversion":
+		GameState.status_message.connect(func(text: String):
+			if "Version mismatch" in text:
+				_pass("got_rejected")
+				_finish()
+		)
 	GameState.players_changed.connect(_on_players_changed)
 	GameState.phase_changed.connect(_on_phase_changed)
 	GameState.it_changed.connect(func(new_it, old_it):
@@ -303,6 +323,11 @@ func _ready() -> void:
 			return
 		"host", "host-swap":
 			NetworkManager.host_lan(port)
+		"host-idle":
+			NetworkManager.host_lan(port)
+		"join-badversion":
+			await get_tree().create_timer(1.5).timeout
+			NetworkManager.join_lan("127.0.0.1", port)
 		"join", "join-swap":
 			await get_tree().create_timer(1.5).timeout
 			NetworkManager.join_lan("127.0.0.1", port)
@@ -388,7 +413,7 @@ func _poll_code_file() -> void:
 func _on_players_changed() -> void:
 	if GameState.players.size() >= 2:
 		_pass("roster_2_players")
-	if mode.begins_with("host") and GameState.phase == GameState.Phase.LOBBY \
+	if mode.begins_with("host") and mode != "host-idle" and GameState.phase == GameState.Phase.LOBBY \
 			and GameState.players.size() >= 2 and not _started_game:
 		var all_ready := true
 		for id in GameState.players:

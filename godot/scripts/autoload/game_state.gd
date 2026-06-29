@@ -25,6 +25,8 @@ const ABILITY_COOLDOWN_TOLERANCE_MS := 250
 var phase: Phase = Phase.MENU
 var local_name := "Player"
 var local_class_id := "slipper"
+## Test-only override for the version sent on join (empty = use GAME_VERSION).
+var version_override := ""
 
 ## peer_id -> {name, class_id, ready, color_index, is_it, time_as_it}
 var players: Dictionary = {}
@@ -75,6 +77,10 @@ func local_id() -> int:
 	return multiplayer.get_unique_id()
 
 
+func _sent_version() -> String:
+	return version_override if version_override != "" else GameConfig.GAME_VERSION
+
+
 func _set_phase(p: Phase) -> void:
 	if phase == p:
 		return
@@ -91,7 +97,7 @@ func enter_lobby() -> void:
 		_next_color = 0
 		_host_add_player(1, local_name, local_class_id)
 	else:
-		register_player.rpc_id(1, local_name, local_class_id)
+		register_player.rpc_id(1, local_name, local_class_id, _sent_version())
 	_set_phase(Phase.LOBBY)
 
 
@@ -149,10 +155,22 @@ func _on_peer_disconnected(peer_id: int) -> void:
 # --- lobby: client -> host ---------------------------------------------------
 
 @rpc("any_peer", "call_remote", "reliable")
-func register_player(p_name: String, class_id: String) -> void:
+func register_player(p_name: String, class_id: String, version: String) -> void:
 	if not is_host():
 		return
+	if version != GameConfig.GAME_VERSION:
+		reject_join.rpc_id(multiplayer.get_remote_sender_id(), GameConfig.GAME_VERSION)
+		return
 	_host_add_player(multiplayer.get_remote_sender_id(), p_name, class_id)
+
+
+## Host → a rejected joiner: versions differ. The joiner leaves and shows why.
+@rpc("authority", "call_remote", "reliable")
+func reject_join(host_version: String) -> void:
+	NetworkManager.leave()
+	reset_to_menu("Version mismatch — host is on v%s, you're on v%s. "
+		% [host_version, _sent_version()]
+		+ "Both must run the same version. Update from the menu.")
 
 
 @rpc("any_peer", "call_remote", "reliable")
