@@ -847,6 +847,12 @@ func _run_update_dryrun() -> void:
 	else:
 		print("FAIL dryrun: macos restore"); fails += 1
 
+	# 6) write probe: true for a writable dir, false for a bogus one.
+	if Updater._dir_writable(root) and not Updater._dir_writable("Z:/slip_nope/never"):
+		print("PASS dryrun: write probe")
+	else:
+		print("FAIL dryrun: write probe"); fails += 1
+
 	_rm_tree(root)
 	if fails == 0:
 		print("[bot update-dryrun] ALL CHECKS PASSED"); get_tree().quit(0)

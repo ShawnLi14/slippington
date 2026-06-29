@@ -197,3 +197,78 @@ func install_from_zip(zip_path: String, install_dir: String) -> bool:
 		ok = apply_windows_swap(install_dir, staging)
 	_rm_rf(staging)
 	return ok
+
+
+# --- download + relaunch ------------------------------------------------------
+
+## Streams the download while active so the menu can show progress.
+signal update_progress(downloaded: int, total: int)
+## Update could not be applied; install is unchanged. The menu shows `message`
+## and a manual-download fallback.
+signal update_failed(message: String)
+
+var _dl: HTTPRequest
+var _expected_size := 0
+var _zip_path := ""
+
+
+## User pressed "Update Now": pre-flight, download, install, relaunch.
+func begin_update(asset_url: String, asset_size: int) -> void:
+	var install := _install_dir()
+	if not _dir_writable(install):
+		update_failed.emit("Can't write to the install folder — download the update manually.")
+		return
+	_expected_size = asset_size
+	_zip_path = OS.get_cache_dir().path_join("Slippington-update.zip")
+	_dl = HTTPRequest.new()
+	add_child(_dl)
+	_dl.download_file = _zip_path
+	_dl.request_completed.connect(_on_download_completed)
+	if _dl.request(asset_url, ["User-Agent: " + USER_AGENT]) != OK:
+		_dl.queue_free()
+		_dl = null
+		update_failed.emit("Couldn't start the download.")
+
+
+func _process(_delta: float) -> void:
+	if _dl != null and _dl.get_http_client_status() == HTTPClient.STATUS_BODY:
+		update_progress.emit(_dl.get_downloaded_bytes(), _dl.get_body_size())
+
+
+func _on_download_completed(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+	_dl.queue_free()
+	_dl = null
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		update_failed.emit("Download failed (HTTP %d) — try again or download manually." % code)
+		return
+	var f := FileAccess.open(_zip_path, FileAccess.READ)
+	var got := int(f.get_length()) if f != null else 0
+	if f != null:
+		f.close()
+	if _expected_size > 0 and got != _expected_size:
+		update_failed.emit("Download was incomplete — try again.")
+		return
+	if not install_from_zip(_zip_path, _install_dir()):
+		update_failed.emit("Couldn't apply the update — download manually.")
+		return
+	_relaunch()
+
+
+## A nonexistent / read-only dir returns false (caught before any swap).
+func _dir_writable(dir: String) -> bool:
+	var probe := dir.path_join(".slip_write_test")
+	var f := FileAccess.open(probe, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.close()
+	DirAccess.remove_absolute(probe)
+	return true
+
+
+## Launch the freshly-swapped build and quit this (now-stale) process.
+func _relaunch() -> void:
+	if OS.has_feature("macos"):
+		OS.create_process("/usr/bin/open", [_install_dir().path_join("Slippington.app")])
+	else:
+		OS.create_process(_install_dir().path_join("Slippington.exe"), [])
+	get_tree().quit()
