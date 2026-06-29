@@ -15,9 +15,6 @@ signal update_available(info: Dictionary)
 ## reads this when it builds AND listens to update_available for late arrival.
 var available_update: Dictionary = {}
 
-var _http: HTTPRequest
-
-
 func _ready() -> void:
 	cleanup_leftovers(_install_dir())
 	if OS.has_feature("web"):
@@ -31,16 +28,18 @@ func _ready() -> void:
 
 ## Query GitHub for the latest release; emit update_available if it's newer.
 func check_for_update() -> void:
-	_http = HTTPRequest.new()
-	add_child(_http)
-	_http.request_completed.connect(_on_check_completed)
+	var http := HTTPRequest.new()
+	add_child(http)
 	var headers := ["Accept: application/vnd.github+json", "User-Agent: " + USER_AGENT]
-	if _http.request(RELEASES_API, headers) != OK:
-		_http.queue_free()
+	http.request_completed.connect(
+		func(result: int, code: int, rheaders: PackedStringArray, body: PackedByteArray):
+			_on_check_completed(http, result, code, rheaders, body))
+	if http.request(RELEASES_API, headers) != OK:
+		http.queue_free()
 
 
-func _on_check_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	_http.queue_free()
+func _on_check_completed(http: HTTPRequest, result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	http.queue_free()
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 		return
 	var json: Variant = JSON.parse_string(body.get_string_from_utf8())
