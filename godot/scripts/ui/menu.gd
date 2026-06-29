@@ -359,11 +359,15 @@ func _set_buttons_disabled(disabled: bool) -> void:
 
 var _update_banner: PanelContainer
 var _update_info: Dictionary = {}
+var _update_status: Label
+var _update_box: VBoxContainer
+var _update_started := false
 
 
 func _show_update_banner(info: Dictionary) -> void:
 	_update_info = info
 	if is_instance_valid(_update_banner):
+		remove_child(_update_banner)
 		_update_banner.queue_free()
 	_update_banner = UiTheme.panel()
 	_update_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -375,7 +379,7 @@ func _show_update_banner(info: Dictionary) -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	_update_banner.add_child(row)
-	row.add_child(UiTheme.label("Update available: v%s" % info.get("version", "?"), 16, UiTheme.INK))
+	row.add_child(UiTheme.label("Update available: v%s" % info.get("version", "?"), 16, UiTheme.CREAM))
 	var now_btn := UiTheme.button("UPDATE NOW", true)
 	now_btn.pressed.connect(_on_update_now)
 	row.add_child(now_btn)
@@ -389,28 +393,39 @@ func _show_update_banner(info: Dictionary) -> void:
 
 
 func _on_update_now() -> void:
+	if _update_started:
+		return  # a download is already underway; ignore a repeat press
+	_update_started = true
 	for child in _update_banner.get_children():
 		child.queue_free()
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 6)
-	_update_banner.add_child(box)
-	var status := UiTheme.label("Downloading update…", 15, UiTheme.INK)
-	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(status)
-	Updater.update_progress.connect(func(done: int, total: int):
-		if is_instance_valid(status):
-			if total > 0:
-				status.text = "Downloading update… %d%%" % int(100.0 * done / total)
-			else:
-				status.text = "Downloading update… %d KB" % int(done / 1024)
-	)
-	Updater.update_failed.connect(func(message: String):
-		if not is_instance_valid(status):
-			return
-		status.text = message
-		var link := UiTheme.button("OPEN DOWNLOAD PAGE")
-		link.pressed.connect(func(): OS.shell_open(str(_update_info.get("notes_url", ""))))
-		box.add_child(link)
-	)
+	_update_box = VBoxContainer.new()
+	_update_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_update_box.add_theme_constant_override("separation", 6)
+	_update_banner.add_child(_update_box)
+	_update_status = UiTheme.label("Downloading update…", 15, UiTheme.CREAM)
+	_update_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_update_box.add_child(_update_status)
+	# Method connections (not lambdas) so Godot auto-disconnects them when this
+	# screen is freed — autoload-signal lambdas outlive the menu and crash
+	# release builds once it's gone (see the note in _ready).
+	Updater.update_progress.connect(_on_update_progress)
+	Updater.update_failed.connect(_on_update_failed)
 	Updater.begin_update(str(_update_info.get("asset_url", "")), int(_update_info.get("asset_size", 0)))
+
+
+func _on_update_progress(done: int, total: int) -> void:
+	if not is_instance_valid(_update_status):
+		return
+	if total > 0:
+		_update_status.text = "Downloading update… %d%%" % int(100.0 * done / total)
+	else:
+		_update_status.text = "Downloading update… %d KB" % int(done / 1024)
+
+
+func _on_update_failed(message: String) -> void:
+	if not is_instance_valid(_update_status) or not is_instance_valid(_update_box):
+		return
+	_update_status.text = message
+	var link := UiTheme.button("OPEN DOWNLOAD PAGE")
+	link.pressed.connect(func(): OS.shell_open(str(_update_info.get("notes_url", ""))))
+	_update_box.add_child(link)
