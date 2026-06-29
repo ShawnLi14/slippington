@@ -189,6 +189,25 @@ func _ready() -> void:
 	NetworkManager.joiner_progress.connect(_on_progress)
 	GameState.status_message.connect(_on_status_message)
 
+	# Version label, pinned bottom-right of the full-rect menu.
+	var ver := UiTheme.label("v" + GameConfig.GAME_VERSION, 13, Color(1, 1, 1, 0.45))
+	ver.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.12, 0.7))
+	ver.add_theme_constant_override("outline_size", 3)
+	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.offset_left = -120
+	ver.offset_top = -34
+	ver.offset_right = -12
+	ver.offset_bottom = -8
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	add_child(ver)
+
+	# Update banner (desktop). Show now if the check already finished, and also
+	# listen for a late arrival. Method connection (not a lambda) so it survives
+	# this screen being freed during a scene swap.
+	Updater.update_available.connect(_show_update_banner)
+	if not Updater.available_update.is_empty():
+		_show_update_banner(Updater.available_update)
+
 
 func _spacer(h: float) -> Control:
 	var s := Control.new()
@@ -336,3 +355,62 @@ func _set_status(text: String, color: Color) -> void:
 func _set_buttons_disabled(disabled: bool) -> void:
 	for b in _buttons:
 		b.disabled = disabled
+
+
+var _update_banner: PanelContainer
+var _update_info: Dictionary = {}
+
+
+func _show_update_banner(info: Dictionary) -> void:
+	_update_info = info
+	if is_instance_valid(_update_banner):
+		_update_banner.queue_free()
+	_update_banner = UiTheme.panel()
+	_update_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_update_banner.offset_left = 0
+	_update_banner.offset_top = 12
+	_update_banner.offset_right = 0
+	_update_banner.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	_update_banner.add_child(row)
+	row.add_child(UiTheme.label("Update available: v%s" % info.get("version", "?"), 16, UiTheme.INK))
+	var now_btn := UiTheme.button("UPDATE NOW", true)
+	now_btn.pressed.connect(_on_update_now)
+	row.add_child(now_btn)
+	var notes_btn := UiTheme.button("RELEASE NOTES")
+	notes_btn.pressed.connect(func(): OS.shell_open(str(_update_info.get("notes_url", ""))))
+	row.add_child(notes_btn)
+	var later_btn := UiTheme.button("LATER")
+	later_btn.pressed.connect(func(): _update_banner.visible = false)
+	row.add_child(later_btn)
+	add_child(_update_banner)
+
+
+func _on_update_now() -> void:
+	for child in _update_banner.get_children():
+		child.queue_free()
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 6)
+	_update_banner.add_child(box)
+	var status := UiTheme.label("Downloading update…", 15, UiTheme.INK)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(status)
+	Updater.update_progress.connect(func(done: int, total: int):
+		if is_instance_valid(status):
+			if total > 0:
+				status.text = "Downloading update… %d%%" % int(100.0 * done / total)
+			else:
+				status.text = "Downloading update… %d KB" % int(done / 1024)
+	)
+	Updater.update_failed.connect(func(message: String):
+		if not is_instance_valid(status):
+			return
+		status.text = message
+		var link := UiTheme.button("OPEN DOWNLOAD PAGE")
+		link.pressed.connect(func(): OS.shell_open(str(_update_info.get("notes_url", ""))))
+		box.add_child(link)
+	)
+	Updater.begin_update(str(_update_info.get("asset_url", "")), int(_update_info.get("asset_size", 0)))

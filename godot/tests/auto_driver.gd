@@ -202,6 +202,18 @@ func _ready() -> void:
 		"shot-menu":
 			_take_screenshot(1.0)
 			return
+		"shot-update":
+			# Inject a fake available update and re-emit so the already-built
+			# menu renders its banner, then screenshot.
+			Updater.available_update = {
+				"version": "9.9.9",
+				"notes_url": "https://github.com/ShawnLi14/slippington/releases",
+				"asset_url": "https://example/none.zip",
+				"asset_size": 1,
+			}
+			Updater.update_available.emit(Updater.available_update)
+			_take_screenshot(1.0)
+			return
 		"shot-lobby":
 			# Fake a populated online lobby (no network) to render the code
 			# panel, player rows and pickers.
